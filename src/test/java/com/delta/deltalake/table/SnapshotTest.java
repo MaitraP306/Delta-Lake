@@ -70,9 +70,11 @@ class SnapshotTest {
                 )
         );
 
-        Snapshot version0 = log.loadSnapshot(0);
-        Snapshot version1 = log.loadSnapshot(1);
-        Snapshot version2 = log.loadSnapshot(2);
+        SnapshotManager snapshotManager = new SnapshotManager(log);
+
+        Snapshot version0 = snapshotManager.loadSnapshot(0);
+        Snapshot version1 = snapshotManager.loadSnapshot(1);
+        Snapshot version2 = snapshotManager.loadSnapshot(2);
 
         assertEquals(1, version0.fileCount());
         assertTrue(version0.contains("data/a.parquet"));

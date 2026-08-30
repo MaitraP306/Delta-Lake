@@ -1,11 +1,8 @@
 package com.delta.deltalake.log;
 
 import com.delta.deltalake.storage.Storage;
-import com.delta.deltalake.table.Snapshot;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import java.util.LinkedHashMap;
-import java.util.Map;
 
 
 import java.io.IOException;
@@ -77,63 +74,5 @@ public class TransactionLog {
         return LOG_DIRECTORY + "/" +
                 String.format("%020d.json", version);
     }
-
-
-    public LogAction parseAction(LogRecord record) {
-        return switch (record.type()) {
-            case "add" -> mapper.convertValue(
-                    record.action(),
-                    AddFile.class
-            );
-
-            case "remove" -> mapper.convertValue(
-                    record.action(),
-                    RemoveFile.class
-            );
-
-            default -> throw new IllegalArgumentException(
-                    "Unsupported log action: " + record.type()
-            );
-        };
-    }
-
-
-    public Snapshot loadSnapshot(long targetVersion) throws IOException {
-        if (targetVersion < 0) {
-            throw new IllegalArgumentException("Version must be non-negative");
-        }
-
-        long latest = latestVersion();
-
-        if (targetVersion > latest) {
-            throw new IllegalArgumentException(
-                    "Requested version " + targetVersion +
-                    " but latest version is " + latest
-            );
-        }
-
-        Map<String, AddFile> activeFiles = new java.util.LinkedHashMap<>();
-
-        for (long version = 0; version <= targetVersion; version++) {
-            List<LogRecord> records = read(version);
-
-            for (LogRecord record : records) {
-                LogAction action = parseAction(record);
-
-                if (action instanceof AddFile addFile) {
-                    activeFiles.put(addFile.path(), addFile);
-                } else if (action instanceof RemoveFile removeFile) {
-                    activeFiles.remove(removeFile.path());
-                } else {
-                    throw new IllegalArgumentException(
-                            "Unsupported action type: " + record.type()
-                    );
-                }
-            }
-        }
-
-        return new Snapshot(targetVersion, activeFiles);
-    }
-
 
 }
