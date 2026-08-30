@@ -1,1 +1,13 @@
+target/
+.vscode/
+.idea/
 
+*.class
+.DS_Store
+
+data/*
+results/*
+experiments/results/*
+
+.env
+.aws/
