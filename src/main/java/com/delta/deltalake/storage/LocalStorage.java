@@ -3,6 +3,7 @@ package com.delta.deltalake.storage;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.StandardCopyOption;
 import java.util.List;
 import java.util.stream.Stream;
 
@@ -24,6 +25,19 @@ public class LocalStorage implements Storage {
         Path path = resolve(key);
         Files.createDirectories(path.getParent());
         Files.write(path, data);
+    }
+
+    @Override
+    public void write(String key, Path source) throws IOException {
+        Path destination = resolve(key);
+
+        Files.createDirectories(destination.getParent());
+
+        Files.copy(
+                source,
+                destination,
+                StandardCopyOption.REPLACE_EXISTING
+        );
     }
 
     @Override
