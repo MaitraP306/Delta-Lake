@@ -6,7 +6,9 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 
 public final class TransactionLog {
     public static final String LOG_DIRECTORY = "_delta_log";
@@ -14,6 +16,12 @@ public final class TransactionLog {
 
     private final Storage storage;
     private final ObjectMapper mapper;
+    private final LinkedHashMap<Long, List<LogRecord>> readCache = new LinkedHashMap<>(16, 0.75f, true) {
+        @Override
+        protected boolean removeEldestEntry(Map.Entry<Long, List<LogRecord>> eldest) {
+            return size() > 128;
+        }
+    };
     public TransactionLog(Storage storage) {
         this.storage = storage;
         this.mapper = new ObjectMapper();
@@ -54,8 +62,14 @@ public final class TransactionLog {
         return storage.create(logPath(version), mapper.writeValueAsBytes(records));
     }
     public List<LogRecord> read(long version) throws IOException {
+        synchronized (readCache) {
+            List<LogRecord> cached = readCache.get(version);
+            if (cached != null) return cached;
+        }
         byte[] data = storage.read(logPath(version));
-        return mapper.readValue(data, new TypeReference<List<LogRecord>>() {});
+        List<LogRecord> decoded = mapper.readValue(data, new TypeReference<List<LogRecord>>() {});
+        synchronized (readCache) { readCache.put(version, decoded); }
+        return decoded;
     }
 
     private long parseLogVersion(String file) throws IOException {

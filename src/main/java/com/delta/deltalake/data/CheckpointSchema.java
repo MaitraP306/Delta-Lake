@@ -34,7 +34,8 @@ public final class CheckpointSchema {
                         Schema.create(Schema.Type.DOUBLE),
                         Schema.create(Schema.Type.FLOAT),
                         Schema.create(Schema.Type.STRING),
-                        Schema.create(Schema.Type.BOOLEAN)
+                        Schema.create(Schema.Type.BOOLEAN),
+                        Schema.create(Schema.Type.BYTES)
                 );
 
         COLUMN_STATS_SCHEMA.setFields(
@@ -54,6 +55,12 @@ public final class CheckpointSchema {
                         new Schema.Field(
                                 "max",
                                 nullableStat,
+                                null,
+                                null
+                        ),
+                        new Schema.Field(
+                                "valueType",
+                                Schema.createUnion(Schema.create(Schema.Type.NULL), Schema.create(Schema.Type.STRING)),
                                 null,
                                 null
                         ),
