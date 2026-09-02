@@ -1,4 +1,4 @@
 package com.delta.deltalake.log;
-
-public interface LogAction {
+public sealed interface LogAction
+        permits AddFile, RemoveFile, Metadata, Protocol, CommitInfo, Txn {
 }

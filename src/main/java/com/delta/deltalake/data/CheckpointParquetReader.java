@@ -11,26 +11,23 @@ import java.nio.file.Files;
 import java.util.ArrayList;
 import java.util.List;
 
-public final class ParquetReader {
+public final class CheckpointParquetReader {
 
-    private ParquetReader() {}
+    private CheckpointParquetReader() {}
 
     public static List<GenericRecord> read(java.nio.file.Path input) throws IOException {
-
         if (!Files.exists(input)) {
-            throw new IOException("Parquet file does not exist: " + input);
+            throw new IOException("Checkpoint does not exist: " + input);
         }
 
         HadoopInputFile inputFile = HadoopInputFile.fromPath(new Path(input.toUri()), new Configuration());
-        List<GenericRecord> records = new ArrayList<>();
-
+        List<GenericRecord> rows = new ArrayList<>();
         try (org.apache.parquet.hadoop.ParquetReader<GenericRecord> reader = AvroParquetReader.<GenericRecord>builder(inputFile).build()) {
-            GenericRecord record;
-            while ((record = reader.read()) != null) {
-                records.add(record);
+            GenericRecord row;
+            while ((row = reader.read()) != null) {
+                rows.add(row);
             }
         }
-
-        return records;
+        return rows;
     }
 }
