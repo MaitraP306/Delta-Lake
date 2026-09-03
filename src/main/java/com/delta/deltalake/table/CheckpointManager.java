@@ -4,6 +4,7 @@ import com.delta.deltalake.data.CheckpointCodec;
 import com.delta.deltalake.data.CheckpointParquetReader;
 import com.delta.deltalake.data.CheckpointParquetWriter;
 import com.delta.deltalake.data.CheckpointSchema;
+import com.delta.deltalake.cache.DeltaCache;
 import com.delta.deltalake.log.LastCheckpoint;
 import com.delta.deltalake.log.LogAction;
 import com.delta.deltalake.log.RemoveFile;
@@ -17,9 +18,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.util.ArrayList;
-import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Map;
 
 import org.apache.avro.generic.GenericRecord;
 
@@ -30,12 +29,7 @@ public final class CheckpointManager {
 
     private final Storage storage;
     private final TransactionLog transactionLog;
-    private final LinkedHashMap<Long, List<LogAction>> loadCache = new LinkedHashMap<>(8, 0.75f, true) {
-        @Override
-        protected boolean removeEldestEntry(Map.Entry<Long, List<LogAction>> eldest) {
-            return size() > 16;
-        }
-    };
+    private final DeltaCache<Long, List<LogAction>> loadCache = new DeltaCache<>(16);
 
     public CheckpointManager(Storage storage, TransactionLog transactionLog) {
         this.storage = storage;
@@ -67,16 +61,12 @@ public final class CheckpointManager {
     }
 
     public List<LogAction> load(long version) throws IOException {
-        synchronized (loadCache) {
-            List<LogAction> cached = loadCache.get(version);
-            if (cached != null) return cached;
-        }
+        List<LogAction> cached = loadCache.get(version);
+        if (cached != null) return cached;
         Path temp = Files.createTempFile("delta-checkpoint-read-", ".parquet");
         try {
             Files.write(temp, storage.read(checkpointPath(version)));
-            List<LogAction> actions = CheckpointParquetReader.read(temp).stream()
-                    .map((GenericRecord r) -> CheckpointCodec.decode(r))
-                    .toList();
+            List<LogAction> actions = CheckpointParquetReader.read(temp).parallelStream().map((GenericRecord r) -> CheckpointCodec.decode(r)).toList();
             synchronized (loadCache) {
                 loadCache.put(version, actions);
             }

@@ -12,4 +12,7 @@ public interface Storage {
     List<String> list(String prefix) throws IOException;
     List<String> listAfter(String prefix, String startAfter) throws IOException;
     void delete(String key) throws IOException;
+    default boolean supportsEventualConsistency() { return false; }
+    default long size(String key) throws IOException { return read(key).length; }
+    default long modificationTimeMillis(String key) throws IOException { return 0L; }
 }

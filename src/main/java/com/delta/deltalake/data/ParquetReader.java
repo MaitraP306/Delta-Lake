@@ -1,5 +1,6 @@
 package com.delta.deltalake.data;
 
+import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.Path;
@@ -24,7 +25,7 @@ public final class ParquetReader {
         HadoopInputFile inputFile = HadoopInputFile.fromPath(new Path(input.toUri()), new Configuration());
         List<GenericRecord> records = new ArrayList<>();
 
-        try (org.apache.parquet.hadoop.ParquetReader<GenericRecord> reader = AvroParquetReader.<GenericRecord>builder(inputFile).build()) {
+        try (org.apache.parquet.hadoop.ParquetReader<GenericRecord> reader = AvroParquetReader.<GenericRecord>builder(inputFile).withDataModel(GenericData.get()).build()) {
             GenericRecord record;
             while ((record = reader.read()) != null) {
                 records.add(record);

@@ -98,6 +98,12 @@ public final class LocalStorage implements Storage {
     }
 
     @Override
+    public long size(String key) throws IOException { return Files.size(resolve(key)); }
+
+    @Override
+    public long modificationTimeMillis(String key) throws IOException { return Files.getLastModifiedTime(resolve(key)).toMillis(); }
+
+    @Override
     public void delete(String key) throws IOException {
         Files.deleteIfExists(resolve(key));
     }

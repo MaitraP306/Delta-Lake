@@ -184,7 +184,6 @@ class DeltaTableTest {
             Files.deleteIfExists(checkpoint);
         }
     }
-    // CHANGED: Regression coverage for the newly implemented storage features.
     @Test
     void genericRangeQueryAndStatisticsCoverMultipleColumns() throws Exception {
         DeltaTable table = DeltaTable.open(new LocalStorage(Files.createTempDirectory("delta-generic-query")));
@@ -220,7 +219,6 @@ class DeltaTableTest {
     void partitionedWritesAndStreamingSkipLayoutOnlyChanges() throws Exception {
         LocalStorage storage = new LocalStorage(Files.createTempDirectory("delta-partition-stream"));
         DeltaTable table = DeltaTable.open(storage, List.of("age"));
-        // CHANGED: Subscribe before the write so the streaming consumer models a live incremental reader.
         DeltaTable.StreamingConsumer consumer = table.streamingConsumer();
         table.append(List.of(new Record(1, "A", 20)));
         assertTrue(storage.exists("data/age=20"));
@@ -230,7 +228,6 @@ class DeltaTableTest {
         assertTrue(storage.exists("data/age=30"));
         assertFalse(consumer.poll().isEmpty());
 
-        // CHANGED: Two source files make OPTIMIZE perform a real layout-only rewrite.
         table.optimize();
         assertTrue(consumer.poll().isEmpty());
     }
@@ -253,7 +250,6 @@ class DeltaTableTest {
         assertEquals(1, auto.snapshot().fileCount());
     }
 
-    // CHANGED: End-to-end coverage proves the table engine now operates on arbitrary named columns.
     @Test
     void genericRowsSupportArbitrarySchemaPartitioningStatisticsAndMutations() throws Exception {
         LocalStorage storage = new LocalStorage(Files.createTempDirectory("delta-generic-row"));
@@ -290,7 +286,6 @@ class DeltaTableTest {
         assertEquals(3, table.readRows().size());
     }
 
-    // CHANGED: Verify old Parquet objects are projected through the evolved logical schema without rewriting them.
     @Test
     void genericSchemaEvolutionProjectsOldFiles() throws Exception {
         DeltaTable table = DeltaTable.open(new LocalStorage(Files.createTempDirectory("delta-schema-projection")));
@@ -309,7 +304,6 @@ class DeltaTableTest {
         assertNull(projected.get("country"));
     }
 
-    // CHANGED: Rollback regression coverage for restoring an earlier immutable table state as a new version.
     @Test
     void rollbackRestoresHistoricalSnapshot() throws Exception {
         DeltaTable table = DeltaTable.open(new LocalStorage(Files.createTempDirectory("delta-rollback")));
@@ -318,13 +312,11 @@ class DeltaTableTest {
         long rollbackVersion = table.rollbackToVersion(0);
         assertEquals(rollbackVersion, table.version());
         assertEquals(List.of(new Record(1, "A", 20)), table.readAll());
-        // CHANGED: Version 0 is the first append, so its historical snapshot contains one row.
         assertEquals(1, table.read(0).size());
         assertTrue(table.history().stream().anyMatch(h -> h.operation().equals("ROLLBACK")));
     }
 
 
-// CHANGED: Coverage for general schema evolution (drop, rename via alias, and numeric widening).
 @Test
 void schemaEvolutionSupportsDropRenameAndTypeWidening() throws Exception {
     LocalStorage storage = new LocalStorage(Files.createTempDirectory("delta-schema-general"));
@@ -349,11 +341,9 @@ void schemaEvolutionSupportsDropRenameAndTypeWidening() throws Exception {
     assertEquals(7L, projected.get("value2"));
     assertFalse(projected.contains("obsolete"));
 
-    // CHANGED: A dropped field is physically rewritten out of the active Parquet object.
     Snapshot evolvedSnapshot = table.snapshot();
     assertEquals(1, evolvedSnapshot.activeFiles().size());
     assertTrue(evolvedSnapshot.activeFiles().iterator().next().path().contains(".parquet"));
-    // CHANGED: Removed Parquet objects remain physically present as tombstoned files until VACUUM.
     assertTrue(storage.exists(oldPath));
 
     Row next = Row.of(evolved, Map.of("id", 2L, "value2", 11L));
@@ -361,7 +351,6 @@ void schemaEvolutionSupportsDropRenameAndTypeWidening() throws Exception {
     assertEquals(2, table.readRows().size());
 }
 
-// CHANGED: Coverage for ordered MERGE UPDATE/DELETE and conditional NOT MATCHED INSERT clauses.
 @Test
 void mergeSupportsConditionalUpdateDeleteAndInsert() throws Exception {
     DeltaTable table = DeltaTable.open(new LocalStorage(Files.createTempDirectory("delta-merge-clauses")));
@@ -371,18 +360,12 @@ void mergeSupportsConditionalUpdateDeleteAndInsert() throws Exception {
               {"name":"balance","type":"double"},
               {"name":"active","type":"boolean"}]}
             """);
-    table.appendRows(List.of(
-            Row.of(schema, Map.of("id",1L,"balance",100.0,"active",true)),
-            Row.of(schema, Map.of("id",2L,"balance",20.0,"active",true))));
+    table.appendRows(List.of(Row.of(schema, Map.of("id",1L,"balance",100.0,"active",true)), Row.of(schema, Map.of("id",2L,"balance",20.0,"active",true))));
 
     Row source1 = Row.of(schema, Map.of("id",1L,"balance",150.0,"active",true));
     Row source2 = Row.of(schema, Map.of("id",2L,"balance",0.0,"active",false));
     Row source3 = Row.of(schema, Map.of("id",3L,"balance",30.0,"active",true));
-    DeltaTable.MergeSpec spec = DeltaTable.MergeSpec.builder()
-            .whenMatchedDelete(ctx -> !ctx.source().get("active").equals(true))
-            .whenMatchedUpdate((target, source) -> source)
-            .whenNotMatchedInsert(source -> (Boolean) source.get("active"), source -> source)
-            .build();
+    DeltaTable.MergeSpec spec = DeltaTable.MergeSpec.builder().whenMatchedDelete(ctx -> !ctx.source().get("active").equals(true)).whenMatchedUpdate((target, source) -> source).whenNotMatchedInsert(source -> (Boolean) source.get("active"), source -> source).build();
     table.mergeRows(List.of(source1, source2, source3), "id", spec);
 
     List<Row> rows = table.readRows();
@@ -391,7 +374,6 @@ void mergeSupportsConditionalUpdateDeleteAndInsert() throws Exception {
     assertTrue(rows.stream().anyMatch(r -> r.get("id").equals(3L)));
     assertTrue(rows.stream().noneMatch(r -> r.get("id").equals(2L)));
 }
-// CHANGED: MERGE accepts a source schema different from the target and uses clauses to build target rows.
 @Test
 void mergeAcceptsDifferentSourceSchema() throws Exception {
     DeltaTable table = DeltaTable.open(new LocalStorage(Files.createTempDirectory("delta-merge-different-schema")));
@@ -409,10 +391,7 @@ void mergeAcceptsDifferentSourceSchema() throws Exception {
             """);
     Row update = Row.of(sourceSchema, Map.of("id",1L,"enabled",false));
     Row insert = Row.of(sourceSchema, Map.of("id",2L,"enabled",true));
-    DeltaTable.MergeSpec spec = DeltaTable.MergeSpec.builder()
-            .whenMatchedUpdate((target, source) -> target.with("active", source.get("enabled")))
-            .whenNotMatchedInsert(source -> Row.of(targetSchema, Map.of("id", source.get("id"), "name", "generated", "active", source.get("enabled"))))
-            .build();
+    DeltaTable.MergeSpec spec = DeltaTable.MergeSpec.builder().whenMatchedUpdate((target, source) -> target.with("active", source.get("enabled"))).whenNotMatchedInsert(source -> Row.of(targetSchema, Map.of("id", source.get("id"), "name", "generated", "active", source.get("enabled")))).build();
     table.mergeRows(List.of(update, insert), "id", spec);
     assertFalse((Boolean) table.readRows().stream().filter(r -> r.get("id").equals(1L)).findFirst().orElseThrow().get("active"));
     assertTrue(table.readRows().stream().anyMatch(r -> r.get("id").equals(2L) && r.get("name").equals("generated")));
@@ -444,8 +423,7 @@ void mergeAcceptsDifferentSourceSchema() throws Exception {
         CheckpointManager manager = new CheckpointManager(storage, new com.delta.deltalake.log.TransactionLog(storage));
         manager.create(1);
         manager.create(0);
-        LastCheckpoint pointer = new com.delta.deltalake.log.TransactionLog(storage)
-                .deserialize(storage.read("_delta_log/_last_checkpoint"), LastCheckpoint.class);
+        LastCheckpoint pointer = new com.delta.deltalake.log.TransactionLog(storage).deserialize(storage.read("_delta_log/_last_checkpoint"), LastCheckpoint.class);
         assertEquals(1, pointer.version());
     }
 }

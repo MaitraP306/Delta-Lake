@@ -1,5 +1,6 @@
 package com.delta.deltalake.table;
 
+import com.delta.deltalake.cache.DeltaCache;
 import com.delta.deltalake.log.LogAction;
 import com.delta.deltalake.log.TransactionLog;
 import com.delta.deltalake.log.VersionedLogRecord;
@@ -12,14 +13,19 @@ public final class SnapshotManager {
     private final TransactionLog transactionLog;
     private final CheckpointManager checkpointManager;
     private final ObjectMapper mapper;
+    private final DeltaCache<Long, Snapshot> snapshotCache = new DeltaCache<>(32);
 
     public SnapshotManager(TransactionLog transactionLog) {
-        this(transactionLog, null);
+        this(transactionLog, (CheckpointManager) null);
     }
 
     public SnapshotManager(TransactionLog transactionLog, Storage storage) {
-        this.transactionLog = transactionLog;
-        this.checkpointManager = storage == null ? null : new CheckpointManager(storage, transactionLog);
+        this(transactionLog, storage == null ? null : new CheckpointManager(storage, transactionLog));
+    }
+
+    public SnapshotManager(TransactionLog transactionLog, CheckpointManager checkpointManager) {
+        this.transactionLog = java.util.Objects.requireNonNull(transactionLog);
+        this.checkpointManager = checkpointManager;
         this.mapper = transactionLog.mapper();
     }
 
@@ -27,8 +33,16 @@ public final class SnapshotManager {
         return loadSnapshot(targetVersion, true);
     }
 
+    void invalidate(long version) {
+        snapshotCache.remove(version);
+    }
+
     Snapshot loadSnapshot(long targetVersion, boolean useCheckpoint) throws IOException {
         if (targetVersion < 0) throw new IllegalArgumentException("Version must be non-negative");
+        if (useCheckpoint) {
+            Snapshot cached = snapshotCache.get(targetVersion);
+            if (cached != null) return cached;
+        }
         long latest = transactionLog.latestVersion();
         if (targetVersion > latest) {
             throw new IllegalArgumentException("Requested version " + targetVersion + " but latest version is " + latest);
@@ -44,9 +58,11 @@ public final class SnapshotManager {
                 startVersion = checkpoint;
             }
         }
-        for (VersionedLogRecord versionedRecord : transactionLog.tail(startVersion, targetVersion)) {
+        for (VersionedLogRecord versionedRecord : transactionLog.tailParallel(startVersion, targetVersion)) {
             builder.apply(versionedRecord.record());
         }
-        return builder.build(targetVersion);
+        Snapshot result = builder.build(targetVersion);
+        if (useCheckpoint) snapshotCache.put(targetVersion, result);
+        return result;
     }
 }

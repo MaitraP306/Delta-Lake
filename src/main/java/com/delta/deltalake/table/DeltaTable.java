@@ -8,6 +8,7 @@ import com.delta.deltalake.data.Row;
 import com.delta.deltalake.data.RowCodec;
 import com.delta.deltalake.data.SchemaValidator;
 import com.delta.deltalake.data.TableSchema;
+import com.delta.deltalake.cache.DeltaCache;
 import com.delta.deltalake.log.*;
 import com.delta.deltalake.storage.Storage;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -46,17 +47,14 @@ public final class DeltaTable {
     private final ObjectMapper mapper;
     private final int checkpointInterval;
     private final List<String> partitionColumns;
-    private final LinkedHashMap<String, List<Row>> dataCache = new LinkedHashMap<>(16, 0.75f, true) {
-        @Override protected boolean removeEldestEntry(Map.Entry<String, List<Row>> eldest) {
-            return size() > DATA_CACHE_LIMIT;
-        }
-    };
+    private volatile List<String> effectivePartitionColumnsCache;
+    private final DeltaCache<String, List<Row>> dataCache = new DeltaCache<>(DATA_CACHE_LIMIT);
 
     private DeltaTable(Storage storage, int checkpointInterval, List<String> partitionColumns) {
         this.storage = Objects.requireNonNull(storage);
         this.transactionLog = new TransactionLog(storage);
-        this.snapshotManager = new SnapshotManager(transactionLog, storage);
         this.checkpointManager = new CheckpointManager(storage, transactionLog);
+        this.snapshotManager = new SnapshotManager(transactionLog, checkpointManager);
         this.mapper = transactionLog.mapper();
         this.checkpointInterval = checkpointInterval;
         this.partitionColumns = validatePartitionColumns(partitionColumns);
@@ -73,6 +71,8 @@ public final class DeltaTable {
 
     public boolean exists() throws IOException { return transactionLog.latestVersion() >= 0; }
     public long version() throws IOException { return transactionLog.latestVersion(); }
+    public Storage storage() { return storage; }
+    public TableSchema currentSchema() throws IOException { return tableSchema(); }
 
     public Snapshot snapshot() throws IOException {
         long version = version();
@@ -80,6 +80,7 @@ public final class DeltaTable {
         return snapshotManager.loadSnapshot(version);
     }
     public Snapshot snapshot(long version) throws IOException { return snapshotManager.loadSnapshot(version); }
+    public OptimisticTransaction beginTransaction() throws IOException { return new OptimisticTransaction(transactionLog, snapshotManager, snapshot()); }
 
     public long appendRows(List<Row> rows) throws IOException { return appendRows(rows, null, null); }
 
@@ -95,8 +96,7 @@ public final class DeltaTable {
             for (int attempt = 0; attempt < MAX_COMMIT_RETRIES; attempt++) {
                 long latest = transactionLog.latestVersion();
                 if (latest >= 0) assertSupportedProtocol(snapshotManager.loadSnapshot(latest).protocol());
-                if (appId != null && latest >= 0 && snapshotManager.loadSnapshot(latest).transactions().values().stream()
-                        .anyMatch(txn -> txn.appId().equals(appId) && txn.version() >= txnVersion)) {
+                if (appId != null && latest >= 0 && snapshotManager.loadSnapshot(latest).transactions().values().stream().anyMatch(txn -> txn.appId().equals(appId) && txn.version() >= txnVersion)) {
                     cleanup(dataPaths); return latest;
                 }
                 cleanup(dataPaths); dataPaths.clear();
@@ -137,9 +137,11 @@ public final class DeltaTable {
             Snapshot snap = snapshot();
             List<LogRecord> actions = new ArrayList<>();
             List<String> newPaths = new ArrayList<>();
+            Set<String> readPaths = new LinkedHashSet<>();
             long removedRows = 0;
             for (AddFile file : snap.activeFiles()) {
                 if (!predicates.isEmpty() && !mayMatch(file, predicates, snap.metadata().partitionColumns())) continue;
+                readPaths.add(file.path());
                 List<Row> rows = projectRows(readDataFile(file.path()), tableSchema());
                 List<Row> remaining = rows.stream().filter(predicate.negate()).toList();
                 if (remaining.size() == rows.size()) continue;
@@ -154,9 +156,9 @@ public final class DeltaTable {
             }
             if (removedRows == 0) return snap.version();
             actions.add(0, ActionCodec.encode(new CommitInfo(System.currentTimeMillis(), "DELETE", Map.of("removedRows", Long.toString(removedRows)), userMetadata)));
-            long target = snap.version() + 1;
-            if (!readSetStillValid(snap)) { cleanup(newPaths); continue; }
-            if (transactionLog.append(target, actions)) { checkpointBestEffort(target); maybeAutoOptimize(); return target; }
+            OptimisticTransaction tx = new OptimisticTransaction(transactionLog, snapshotManager, snap);
+            tx.readPaths(new java.util.HashSet<>(readPaths));
+            if (tx.commit(actions)) { checkpointBestEffort(snap.version() + 1); maybeAutoOptimize(); return snap.version() + 1; }
             cleanup(newPaths);
         }
         throw new IOException("Could not commit delete after " + MAX_COMMIT_RETRIES + " attempts");
@@ -232,14 +234,11 @@ public final class DeltaTable {
                 actions.add(ActionCodec.encode(addFile(path, group, schema, true)));
             }
             if (actions.isEmpty()) return snap.version();
-            actions.add(0, ActionCodec.encode(new CommitInfo(
-                    System.currentTimeMillis(), "MERGE",
-                    Map.of("matchedKey", keyColumn, "matchedClauses", Integer.toString(spec.matchedClauses().size()), "notMatchedClauses", Integer.toString(spec.notMatchedClauses().size())),
-                    userMetadata)));
-
-            long targetVersion = snap.version() + 1;
-            if (!mergeReadSetStillValid(snap, readPaths, file -> fileMayContainAnyKey(file, keyColumn, sourceByKey.keySet()))) { cleanup(newPaths); continue; }
-            if (transactionLog.append(targetVersion, actions)) { checkpointBestEffort(targetVersion); maybeAutoOptimize(); return targetVersion; }
+            actions.add(0, ActionCodec.encode(new CommitInfo(System.currentTimeMillis(), "MERGE", Map.of("matchedKey", keyColumn, "matchedClauses", Integer.toString(spec.matchedClauses().size()), "notMatchedClauses", Integer.toString(spec.notMatchedClauses().size())), userMetadata)));
+            OptimisticTransaction tx = new OptimisticTransaction(transactionLog, snapshotManager, snap);
+            tx.readPaths(readPaths);
+            tx.failIfNewFileMatches(file -> fileMayContainAnyKey(file, keyColumn, sourceByKey.keySet()));
+            if (tx.commit(actions)) { checkpointBestEffort(snap.version() + 1); maybeAutoOptimize(); return snap.version() + 1; }
             cleanup(newPaths);
         }
         throw new IOException("Could not commit merge after " + MAX_COMMIT_RETRIES + " attempts");
@@ -334,9 +333,9 @@ public final class DeltaTable {
                     String path = writeDataFile(chunk, schema); newPaths.add(path); actions.add(ActionCodec.encode(addFile(path, chunk, schema, false)));
                 }
             }
-            long target = snap.version() + 1;
-            if (!readSetStillValid(snap)) { cleanup(newPaths); continue; }
-            if (transactionLog.append(target, actions)) { checkpointBestEffort(target); return target; }
+            OptimisticTransaction tx = new OptimisticTransaction(transactionLog, snapshotManager, snap);
+            tx.readPaths(snap.activeFiles().stream().map(AddFile::path).collect(java.util.stream.Collectors.toSet()));
+            if (tx.commit(actions)) { checkpointBestEffort(snap.version() + 1); return snap.version() + 1; }
             cleanup(newPaths);
         }
         throw new IOException("Could not commit optimize after " + MAX_COMMIT_RETRIES + " attempts");
@@ -362,9 +361,9 @@ public final class DeltaTable {
             for (List<Row> group : partitionGroups(source).values()) {
                 String path = writeDataFile(group, schema); newPaths.add(path); actions.add(ActionCodec.encode(addFile(path, group, schema, false)));
             }
-            long target = snap.version() + 1;
-            if (!readSetStillValidForPaths(snap, affectedPaths)) { cleanup(newPaths); continue; }
-            if (transactionLog.append(target, actions)) { checkpointBestEffort(target); return target; }
+            OptimisticTransaction tx = new OptimisticTransaction(transactionLog, snapshotManager, snap);
+            tx.readPaths(affectedPaths);
+            if (tx.commit(actions)) { checkpointBestEffort(snap.version() + 1); return snap.version() + 1; }
             cleanup(newPaths);
         }
         throw new IOException("Could not commit Z-order rewrite after " + MAX_COMMIT_RETRIES + " attempts");
@@ -388,9 +387,7 @@ public final class DeltaTable {
         snap.activeFiles().forEach(f -> protectedPaths.add(f.path()));
         int deleted = 0;
         for (RemoveFile tombstone : snap.tombstones()) {
-            if (tombstone.deletionTimestamp() <= cutoff
-                    && !protectedPaths.contains(tombstone.path())
-                    && storage.exists(tombstone.path())) {
+            if (tombstone.deletionTimestamp() <= cutoff && !protectedPaths.contains(tombstone.path()) && storage.exists(tombstone.path())) {
                 storage.delete(tombstone.path());
                 deleted++;
             }
@@ -417,17 +414,13 @@ public final class DeltaTable {
         Snapshot snap = snapshot();
         Map<String, String> configuration = new LinkedHashMap<>(snap.metadata().configuration());
         configuration.put(DELETED_FILE_RETENTION_MILLIS, Long.toString(retention.toMillis()));
-        List<LogRecord> actions = List.of(
-                ActionCodec.encode(new CommitInfo(System.currentTimeMillis(), "SET TBLPROPERTIES",
-                        Map.of(DELETED_FILE_RETENTION_MILLIS, Long.toString(retention.toMillis())), null)),
-                ActionCodec.encode(new Metadata(snap.metadata().id(), snap.metadata().format(), snap.metadata().schemaString(),
-                        snap.metadata().partitionColumns(), configuration)));
-        long target = snap.version() + 1;
-        if (!readSetStillValid(snap) || !transactionLog.append(target, actions)) {
-            throw new IOException("Could not update retention setting");
-        }
-        checkpointBestEffort(target);
-        return target;
+        List<LogRecord> actions = List.of(ActionCodec.encode(new CommitInfo(System.currentTimeMillis(), "SET TBLPROPERTIES", Map.of(DELETED_FILE_RETENTION_MILLIS, Long.toString(retention.toMillis())), null)), ActionCodec.encode(new Metadata(snap.metadata().id(), snap.metadata().format(), snap.metadata().schemaString(), snap.metadata().partitionColumns(), configuration)));
+        OptimisticTransaction tx = new OptimisticTransaction(transactionLog, snapshotManager, snap);
+        tx.readPaths(new HashSet<>(snap.activeFiles().stream().map(AddFile::path).toList()));
+        tx.failOnMetadataChanges();
+        if (!tx.commit(actions)) throw new IOException("Could not update retention setting");
+        checkpointBestEffort(snap.version() + 1);
+        return snap.version() + 1;
     }
 
     public long rollbackToVersion(long targetVersion) throws IOException {
@@ -440,17 +433,21 @@ public final class DeltaTable {
         if (current.metadata() != null) actions.add(ActionCodec.encode(current.metadata()));
         if (current.protocol() != null) actions.add(ActionCodec.encode(current.protocol()));
         actions.add(0, ActionCodec.encode(new CommitInfo(System.currentTimeMillis(), "ROLLBACK", Map.of("targetVersion", Long.toString(targetVersion)), null)));
-        long target = latest.version() + 1;
-        if (!readSetStillValid(latest)) throw new IOException("Table changed concurrently; retry rollback");
-        if (!transactionLog.append(target, actions)) throw new IOException("Could not commit rollback");
-        checkpointBestEffort(target); return target;
+        OptimisticTransaction tx = new OptimisticTransaction(transactionLog, snapshotManager, latest);
+        tx.readPaths(new HashSet<>(latest.activeFiles().stream().map(AddFile::path).toList()));
+        if (!tx.commit(actions)) throw new IOException("Table changed concurrently; retry rollback");
+        checkpointBestEffort(latest.version() + 1); return latest.version() + 1;
     }
 
     public long upgradeProtocol(int readerVersion, int writerVersion) throws IOException {
         if (readerVersion < 1 || writerVersion < 1) throw new IllegalArgumentException("Protocol versions must be >= 1");
         Snapshot snap = snapshot(); if (readerVersion < snap.protocol().minReaderVersion() || writerVersion < snap.protocol().minWriterVersion()) throw new IllegalArgumentException("Protocol version cannot be downgraded");
         List<LogRecord> actions = List.of(ActionCodec.encode(new CommitInfo(System.currentTimeMillis(), "SET PROTOCOL", Map.of("reader", Integer.toString(readerVersion), "writer", Integer.toString(writerVersion)), null)), ActionCodec.encode(new Protocol(readerVersion, writerVersion)));
-        long target = snap.version() + 1; if (!readSetStillValid(snap) || !transactionLog.append(target, actions)) throw new IOException("Could not upgrade protocol"); checkpointBestEffort(target); return target;
+        OptimisticTransaction tx = new OptimisticTransaction(transactionLog, snapshotManager, snap);
+        tx.readPaths(new HashSet<>(snap.activeFiles().stream().map(AddFile::path).toList()));
+        tx.failOnMetadataChanges();
+        if (!tx.commit(actions)) throw new IOException("Could not upgrade protocol");
+        checkpointBestEffort(snap.version() + 1); return snap.version() + 1;
     }
 
     public long evolveSchema(TableSchema newSchema) throws IOException { return evolveSchema(newSchema, null); }
@@ -485,9 +482,11 @@ public final class DeltaTable {
                 }
             }
             actions.add(ActionCodec.encode(new Metadata(snap.metadata().id(), snap.metadata().format(), newSchema.json(), snap.metadata().partitionColumns(), snap.metadata().configuration())));
-            long target = snap.version() + 1;
-            if (!readSetStillValid(snap) || !transactionLog.append(target, actions)) { cleanup(newPaths); throw new IOException("Could not commit schema evolution"); }
-            checkpointBestEffort(target); return target;
+            OptimisticTransaction tx = new OptimisticTransaction(transactionLog, snapshotManager, snap);
+            tx.readPaths(new HashSet<>(snap.activeFiles().stream().map(AddFile::path).toList()));
+            tx.failOnMetadataChanges();
+            if (!tx.commit(actions)) { cleanup(newPaths); throw new IOException("Could not commit schema evolution"); }
+            checkpointBestEffort(snap.version() + 1); return snap.version() + 1;
         } catch (IOException | RuntimeException e) {
             cleanup(newPaths); throw e;
         }
@@ -496,11 +495,27 @@ public final class DeltaTable {
     public long setAutoOptimize(boolean enabled) throws IOException {
         Snapshot snap = snapshot(); Map<String, String> configuration = new HashMap<>(snap.metadata().configuration()); configuration.put(AUTO_OPTIMIZE, Boolean.toString(enabled));
         List<LogRecord> actions = List.of(ActionCodec.encode(new CommitInfo(System.currentTimeMillis(), "SET TBLPROPERTIES", Map.of(AUTO_OPTIMIZE, Boolean.toString(enabled)), null)), ActionCodec.encode(new Metadata(snap.metadata().id(), snap.metadata().format(), snap.metadata().schemaString(), snap.metadata().partitionColumns(), configuration)));
-        long target = snap.version() + 1; if (!readSetStillValid(snap) || !transactionLog.append(target, actions)) throw new IOException("Could not update auto optimize setting"); checkpointBestEffort(target); return target;
+        OptimisticTransaction tx = new OptimisticTransaction(transactionLog, snapshotManager, snap);
+        tx.readPaths(new HashSet<>(snap.activeFiles().stream().map(AddFile::path).toList()));
+        tx.failOnMetadataChanges();
+        if (!tx.commit(actions)) throw new IOException("Could not update auto optimize setting");
+        checkpointBestEffort(snap.version() + 1); return snap.version() + 1;
     }
 
-    public void checkpoint() throws IOException { long latest = version(); if (latest >= 0) checkpointManager.create(latest); }
-    private void maybeCheckpoint(long version) throws IOException { if ((version + 1) % checkpointInterval == 0) checkpointManager.create(version); }
+    public void checkpoint() throws IOException {
+        long latest = version();
+        if (latest >= 0) {
+            checkpointManager.create(latest);
+            snapshotManager.invalidate(latest);
+        }
+    }
+
+    private void maybeCheckpoint(long version) throws IOException {
+        if ((version + 1) % checkpointInterval == 0) {
+            checkpointManager.create(version);
+            snapshotManager.invalidate(version);
+        }
+    }
     private void checkpointBestEffort(long version) { try { maybeCheckpoint(version); } catch (IOException e) { System.err.println("Delta checkpoint failed at version " + version + ": " + e.getMessage()); } }
 
     private Protocol initialProtocol() { return new Protocol(1, 1); }
@@ -513,9 +528,8 @@ public final class DeltaTable {
     }
 
     private AddFile addFile(String path, List<Row> rows, TableSchema schema, boolean dataChange) throws IOException {
-        long size; long modificationTime;
-        if (storage instanceof com.delta.deltalake.storage.LocalStorage local) { Path p = local.root().resolve(path); size = Files.size(p); modificationTime = Files.getLastModifiedTime(p).toMillis(); }
-        else throw new IllegalStateException("Non-local storage is not supported by this build");
+        long size = storage.size(path);
+        long modificationTime = storage.modificationTimeMillis(path);
         Map<String, FileStats.ColumnStats> columns = new LinkedHashMap<>();
         for (Schema.Field field : schema.avroSchema().getFields()) {
             Object min = null, max = null; long nullCount = 0;
@@ -549,7 +563,7 @@ public final class DeltaTable {
         try {
             List<GenericRecord> genericRecords = rows.stream().map(r -> RowCodec.encode(r, schema)).toList();
             ParquetWriter.write(temp, schema.avroSchema(), genericRecords); storage.write(dataPath, temp);
-            synchronized (dataCache) { dataCache.remove(dataPath); }
+            dataCache.remove(dataPath);
             return dataPath;
         } finally { Files.deleteIfExists(temp); }
     }
@@ -565,7 +579,21 @@ public final class DeltaTable {
     }
     private static String escapePathValue(Object value) { return String.valueOf(value).replace("%", "%25").replace("/", "%2F").replace("=", "%3D"); }
     private static String decodePathValue(String value) { return value.replace("%3D", "=").replace("%2F", "/").replace("%25", "%"); }
-    private List<String> effectivePartitionColumns() throws IOException { return exists() ? snapshot().metadata().partitionColumns() : partitionColumns; }
+    private List<String> effectivePartitionColumns() throws IOException {
+        List<String> cached = effectivePartitionColumnsCache;
+        if (cached != null) return cached;
+        if (!partitionColumns.isEmpty()) {
+            effectivePartitionColumnsCache = partitionColumns;
+            return partitionColumns;
+        }
+        if (!exists()) {
+            effectivePartitionColumnsCache = List.of();
+            return List.of();
+        }
+        List<String> persisted = snapshot().metadata().partitionColumns();
+        effectivePartitionColumnsCache = persisted;
+        return persisted;
+    }
 
     private List<Row> readRows(Snapshot snap) throws IOException {
         TableSchema logicalSchema = snap.metadata() == null ? null : TableSchema.fromJson(snap.metadata().schemaString());
@@ -609,11 +637,25 @@ public final class DeltaTable {
         };
     }
     private List<Row> readDataFile(String path) throws IOException {
-        synchronized (dataCache) { List<Row> cached = dataCache.get(path); if (cached != null) return cached; }
-        if (!(storage instanceof com.delta.deltalake.storage.LocalStorage local)) throw new IOException("This reproduction only supports LocalStorage");
-        Path source = local.root().resolve(path).normalize(); if (!source.startsWith(local.root())) throw new IOException("Invalid data path: " + path);
-        List<Row> decoded = ParquetReader.read(source).stream().map((GenericRecord r) -> RowCodec.decode(r)).toList();
-        synchronized (dataCache) { dataCache.put(path, decoded); } return decoded;
+        List<Row> cached = dataCache.get(path);
+        if (cached != null) return cached;
+        Path source;
+        boolean deleteTemp = false;
+        if (storage instanceof com.delta.deltalake.storage.LocalStorage local) {
+            source = local.root().resolve(path).normalize();
+            if (!source.startsWith(local.root())) throw new IOException("Invalid data path: " + path);
+        } else {
+            source = Files.createTempFile("delta-data-read-", ".parquet");
+            deleteTemp = true;
+            Files.write(source, storage.read(path));
+        }
+        try {
+            List<Row> decoded = ParquetReader.read(source).stream().map((GenericRecord r) -> RowCodec.decode(r)).toList();
+            dataCache.put(path, decoded);
+            return decoded;
+        } finally {
+            if (deleteTemp) Files.deleteIfExists(source);
+        }
     }
 
     private boolean mayMatch(AddFile file, Map<String, QueryRange> predicates, List<String> partitionColumns) {
@@ -694,22 +736,6 @@ public final class DeltaTable {
 
     private List<Row> readCandidateRows(Snapshot snap, Map<String, QueryRange> scope) throws IOException { List<Row> result = new ArrayList<>(); for (AddFile f : snap.activeFiles()) if (mayMatch(f, scope, snap.metadata().partitionColumns())) result.addAll(readDataFile(f.path())); return result; }
 
-    private boolean readSetStillValid(Snapshot snap) throws IOException { return readSetStillValidForPaths(snap, snap.activeFiles().stream().map(AddFile::path).collect(java.util.stream.Collectors.toSet())); }
-    private boolean readSetStillValidForPaths(Snapshot snap, Set<String> paths) throws IOException {
-        Snapshot current = snapshotManager.loadSnapshot(version()); Map<String, AddFile> currentByPath = new HashMap<>(); current.activeFiles().forEach(f -> currentByPath.put(f.path(), f));
-        for (String path : paths) { AddFile original = snap.activeFiles().stream().filter(f -> f.path().equals(path)).findFirst().orElse(null); AddFile now = currentByPath.get(path); if (!Objects.equals(original, now)) return false; }
-        return true;
-    }
-
-    private boolean mergeReadSetStillValid(Snapshot snap, Set<String> readPaths, Predicate<AddFile> candidatePredicate) throws IOException {
-        Snapshot current = snapshotManager.loadSnapshot(version());
-        Map<String, AddFile> original = new HashMap<>(); snap.activeFiles().forEach(f -> original.put(f.path(), f));
-        Map<String, AddFile> now = new HashMap<>(); current.activeFiles().forEach(f -> now.put(f.path(), f));
-        for (String path : readPaths) if (!Objects.equals(original.get(path), now.get(path))) return false;
-        for (AddFile file : current.activeFiles()) if (!original.containsKey(file.path()) && candidatePredicate.test(file)) return false;
-        return true;
-    }
-
     private boolean shouldAutoOptimize() throws IOException { return exists() && Boolean.parseBoolean(snapshot().metadata().configuration().getOrDefault(AUTO_OPTIMIZE, "false")); }
     private void maybeAutoOptimize() throws IOException { if (shouldAutoOptimize() && snapshot().fileCount() >= AUTO_OPTIMIZE_FILE_THRESHOLD) optimize(); }
 
@@ -727,9 +753,7 @@ public final class DeltaTable {
         }
         private MergeResult apply(Row target, Row source) {
             if (!condition.test(new MergeContext(target, source))) return new MergeResult(target, false, false);
-            return action == MergeAction.DELETE
-                    ? new MergeResult(null, true, true)
-                    : new MergeResult(Objects.requireNonNull(updater.apply(target, source)), true, false);
+            return action == MergeAction.DELETE ? new MergeResult(null, true, true) : new MergeResult(Objects.requireNonNull(updater.apply(target, source)), true, false);
         }
     }
     public record NotMatchedClause(Predicate<Row> condition, Function<Row, Row> mapper) {
