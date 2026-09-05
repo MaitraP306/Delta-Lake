@@ -2,13 +2,11 @@ package com.delta.deltalake.storage;
 
 import java.io.File;
 import java.io.IOException;
-import java.nio.file.DirectoryStream;
 import java.nio.file.FileAlreadyExistsException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.nio.file.StandardOpenOption;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 import java.util.stream.Stream;
@@ -74,27 +72,25 @@ public final class LocalStorage implements Storage {
     @Override
     public List<String> listAfter(String prefix, String startAfter) throws IOException {
         Path directory = resolve(prefix);
+
         if (!Files.exists(directory)) {
             return List.of();
         }
+
         if (!Files.isDirectory(directory)) {
             throw new IOException("Storage prefix is not a directory: " + prefix);
         }
-        List<String> result = new ArrayList<>();
-        try (DirectoryStream<Path> stream = Files.newDirectoryStream(directory)) {
-            for (Path path : stream) {
-                if (!Files.isRegularFile(path)) {
-                    continue;
-                }
-                String key = root.relativize(path).toString().replace(File.separator, "/");
 
-                if (key.compareTo(startAfter) > 0) {
-                    result.add(key);
-                }
-            }
+        try (Stream<Path> stream = Files.list(directory)) {
+            return stream
+                    .filter(Files::isRegularFile)
+                    .map(root::relativize)
+                    .map(Path::toString)
+                    .map(path -> path.replace(File.separator, "/"))
+                    .filter(key -> key.compareTo(startAfter) > 0)
+                    .sorted()
+                    .toList();
         }
-        result.sort(String::compareTo);
-        return result;
     }
 
     @Override

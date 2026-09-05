@@ -30,7 +30,9 @@ import java.util.function.Function;
 import java.util.function.Predicate;
 
 public final class DeltaTable {
-    private static final int MAX_COMMIT_RETRIES = 8;
+    private static final int MAX_COMMIT_RETRIES = 12;
+    private static final long COMMIT_RETRY_INITIAL_BACKOFF_MILLIS = 10L;
+    private static final long COMMIT_RETRY_MAX_BACKOFF_MILLIS = 500L;
     private static final int DEFAULT_CHECKPOINT_INTERVAL = 10;
     private static final String APPEND_ONLY = "delta.appendOnly";
     private static final String AUTO_OPTIMIZE = "delta.autoOptimize";
@@ -113,7 +115,11 @@ public final class DeltaTable {
                 actions.add(ActionCodec.encode(new CommitInfo(System.currentTimeMillis(), "WRITE", Map.of("mode", "append"), null)));
                 if (appId != null) actions.add(ActionCodec.encode(new Txn(appId, txnVersion, System.currentTimeMillis())));
                 long target = latest + 1;
-                if (transactionLog.append(target, actions)) { committedVersion = target; break; }
+                if (transactionLog.append(target, actions)) {
+                    committedVersion = target;
+                    break;
+                }
+                sleepBeforeCommitRetry(attempt);
             }
         } catch (IOException | RuntimeException e) {
             cleanup(dataPaths); throw e;
@@ -122,6 +128,20 @@ public final class DeltaTable {
         checkpointBestEffort(committedVersion);
         maybeAutoOptimize();
         return committedVersion;
+    }
+
+    private static void sleepBeforeCommitRetry(int failedAttempt) throws IOException {
+        long exponential = COMMIT_RETRY_INITIAL_BACKOFF_MILLIS
+                << Math.min(failedAttempt, 5);
+        long cap = Math.min(COMMIT_RETRY_MAX_BACKOFF_MILLIS, exponential);
+        long jitter = java.util.concurrent.ThreadLocalRandom.current()
+                .nextLong(cap + 1);
+        try {
+            Thread.sleep(jitter);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new IOException("Interrupted while backing off after a concurrent commit conflict", e);
+        }
     }
 
     public long append(List<Record> records) throws IOException { return append(records, null, null); }
@@ -160,6 +180,7 @@ public final class DeltaTable {
             tx.readPaths(new java.util.HashSet<>(readPaths));
             if (tx.commit(actions)) { checkpointBestEffort(snap.version() + 1); maybeAutoOptimize(); return snap.version() + 1; }
             cleanup(newPaths);
+            sleepBeforeCommitRetry(attempt);
         }
         throw new IOException("Could not commit delete after " + MAX_COMMIT_RETRIES + " attempts");
     }
@@ -240,6 +261,7 @@ public final class DeltaTable {
             tx.failIfNewFileMatches(file -> fileMayContainAnyKey(file, keyColumn, sourceByKey.keySet()));
             if (tx.commit(actions)) { checkpointBestEffort(snap.version() + 1); maybeAutoOptimize(); return snap.version() + 1; }
             cleanup(newPaths);
+            sleepBeforeCommitRetry(attempt);
         }
         throw new IOException("Could not commit merge after " + MAX_COMMIT_RETRIES + " attempts");
     }
@@ -337,6 +359,7 @@ public final class DeltaTable {
             tx.readPaths(snap.activeFiles().stream().map(AddFile::path).collect(java.util.stream.Collectors.toSet()));
             if (tx.commit(actions)) { checkpointBestEffort(snap.version() + 1); return snap.version() + 1; }
             cleanup(newPaths);
+            sleepBeforeCommitRetry(attempt);
         }
         throw new IOException("Could not commit optimize after " + MAX_COMMIT_RETRIES + " attempts");
     }
@@ -365,6 +388,7 @@ public final class DeltaTable {
             tx.readPaths(affectedPaths);
             if (tx.commit(actions)) { checkpointBestEffort(snap.version() + 1); return snap.version() + 1; }
             cleanup(newPaths);
+            sleepBeforeCommitRetry(attempt);
         }
         throw new IOException("Could not commit Z-order rewrite after " + MAX_COMMIT_RETRIES + " attempts");
     }
