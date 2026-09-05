@@ -2,7 +2,7 @@
 
 A Java implementation of the core ideas behind **Delta Lake**: a transactional storage layer that brings ACID semantics, versioned table state, schema management, data skipping, optimization, and reliable object-store persistence to Parquet-based data.
 
-This project is a research-oriented implementation inspired by the paper:
+This project is an implementation inspired by the paper:
 
 > **Delta Lake: High-Performance ACID Table Storage over Cloud Object Stores**  
 > Armbrust et al., PVLDB 2020
