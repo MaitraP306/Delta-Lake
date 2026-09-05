@@ -28,8 +28,7 @@ public final class SchemaValidator {
     }
 
     private static boolean allowsNull(Schema schema) {
-        return schema.getType() == Schema.Type.UNION
-                && schema.getTypes().stream().anyMatch(type -> type.getType() == Schema.Type.NULL);
+        return schema.getType() == Schema.Type.UNION && schema.getTypes().stream().anyMatch(type -> type.getType() == Schema.Type.NULL);
     }
 
     private static void validateValue(String fieldName, Schema schema, Object value) {

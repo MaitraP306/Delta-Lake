@@ -90,12 +90,7 @@ class TransactionLogVerificationTest {
     void invalidAppendArgumentsAreRejected() throws Exception {
         LocalStorage storage = new LocalStorage(tempDir);
         TransactionLog log = new TransactionLog(storage);
-        assertThrows(IllegalArgumentException.class,
-                () -> log.append(
-                        -1,
-                        List.of(commitRecord("WRITE"))
-                )
-        );
+        assertThrows(IllegalArgumentException.class, () -> log.append(-1, List.of(commitRecord("WRITE"))));
         assertThrows(IllegalArgumentException.class, () -> log.append(0, null));
         assertThrows(IllegalArgumentException.class, () -> log.append(0, List.of()));
     }

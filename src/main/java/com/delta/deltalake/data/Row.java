@@ -75,13 +75,11 @@ public final class Row {
         if (value instanceof Instant) return LogicalTypes.timestampMillis().addToSchema(Schema.create(Schema.Type.LONG));
         if (value instanceof List<?> list) {
             if (list.isEmpty()) throw new IllegalArgumentException("Cannot infer element type for empty array column: " + name);
-            Object sample = list.stream().filter(Objects::nonNull).findFirst().orElseThrow(
-                    () -> new IllegalArgumentException("Cannot infer element type for null-only array column: " + name));
+            Object sample = list.stream().filter(Objects::nonNull).findFirst().orElseThrow(() -> new IllegalArgumentException("Cannot infer element type for null-only array column: " + name));
             return Schema.createArray(inferType(name + "[]", sample));
         }
         if (value instanceof Map<?, ?> map) {
-            Object sample = map.values().stream().filter(Objects::nonNull).findFirst().orElseThrow(
-                    () -> new IllegalArgumentException("Cannot infer map value type for null-only map column: " + name));
+            Object sample = map.values().stream().filter(Objects::nonNull).findFirst().orElseThrow(() -> new IllegalArgumentException("Cannot infer map value type for null-only map column: " + name));
             for (Object key : map.keySet()) {
                 if (!(key instanceof CharSequence)) {
                     throw new IllegalArgumentException("Avro map keys must be strings for column: " + name);
@@ -123,9 +121,7 @@ public final class Row {
 
     @Override
     public boolean equals(Object other) {
-        return other instanceof Row row
-                && schema.json().equals(row.schema.json())
-                && values.equals(row.values);
+        return other instanceof Row row && schema.json().equals(row.schema.json()) && values.equals(row.values);
     }
 
     @Override

@@ -19,116 +19,44 @@ import static org.junit.jupiter.api.Assertions.*;
 
 class DeltaTableArchitectureVerificationTest {
 
-    // -------------------------------------------------------------------------
-    // Complete architecture lifecycle
-    // -------------------------------------------------------------------------
-
     @Test
     void completeTableLifecyclePreservesDeltaSemantics() throws Exception {
         Path root = Files.createTempDirectory("delta-architecture-");
 
         try {
-            DeltaTable table = DeltaTable.open(
-                    new LocalStorage(root),
-                    2
-            );
-
+            DeltaTable table = DeltaTable.open(new LocalStorage(root), 2);
             TableSchema original = schema();
-
-            // -----------------------------------------------------------------
-            // 1. Initial write
-            // -----------------------------------------------------------------
-
-            long v0 = table.appendRows(List.of(
-                    row(original, 1L, "Alice", 25),
-                    row(original, 2L, "Bob", 30),
-                    row(original, 3L, "Carol", 35)
-            ));
-
+            long v0 = table.appendRows(List.of(row(original, 1L, "Alice", 25), row(original, 2L, "Bob", 30), row(original, 3L, "Carol", 35)));
             assertEquals(0, v0);
             assertEquals(0, table.version());
+            assertEquals(Set.of(1L, 2L, 3L), ids(table.readRows()));
 
-            assertEquals(
-                    Set.of(1L, 2L, 3L),
-                    ids(table.readRows())
-            );
-
-            // -----------------------------------------------------------------
-            // 2. Append
-            // -----------------------------------------------------------------
-
-            long v1 = table.appendRows(List.of(
-                    row(original, 4L, "David", 40),
-                    row(original, 5L, "Eve", 45)
-            ));
+            long v1 = table.appendRows(List.of(row(original, 4L, "David", 40), row(original, 5L, "Eve", 45)));
 
             assertEquals(1, v1);
 
-            assertEquals(
-                    Set.of(1L, 2L, 3L, 4L, 5L),
-                    ids(table.readRows())
-            );
+            assertEquals(Set.of(1L, 2L, 3L, 4L, 5L), ids(table.readRows()));
 
-            // -----------------------------------------------------------------
-            // 3. Data skipping
-            // -----------------------------------------------------------------
 
-            List<Row> ageRows = table.queryRows(
-                    Map.of(
-                            "age",
-                            new DeltaTable.QueryRange(40, 45)
-                    )
-            );
+            List<Row> ageRows = table.queryRows(Map.of("age", new DeltaTable.QueryRange(40, 45)));
 
-            assertEquals(
-                    Set.of(4L, 5L),
-                    ids(ageRows)
-            );
+            assertEquals(Set.of(4L, 5L), ids(ageRows));
 
-            // -----------------------------------------------------------------
-            // 4. Delete
-            // -----------------------------------------------------------------
-
-            long v2 = table.deleteRows(
-                    row -> ((Number) row.get("id")).longValue() == 2L
-            );
+            long v2 = table.deleteRows(row -> ((Number) row.get("id")).longValue() == 2L);
 
             assertEquals(2, v2);
 
-            assertEquals(
-                    Set.of(1L, 3L, 4L, 5L),
-                    ids(table.readRows())
-            );
+            assertEquals(Set.of(1L, 3L, 4L, 5L), ids(table.readRows()));
 
-            // -----------------------------------------------------------------
-            // 5. Upsert
-            // -----------------------------------------------------------------
-
-            long v3 = table.upsertRows(
-                    List.of(
-                            row(original, 3L, "Carol-updated", 36),
-                            row(original, 6L, "Frank", 50)
-                    ),
-                    "id"
-            );
+            long v3 = table.upsertRows(List.of(row(original, 3L, "Carol-updated", 36), row(original, 6L, "Frank", 50)), "id");
 
             assertEquals(3, v3);
 
             List<Row> afterUpsert = table.readRows();
 
-            assertEquals(
-                    Set.of(1L, 3L, 4L, 5L, 6L),
-                    ids(afterUpsert)
-            );
+            assertEquals(Set.of(1L, 3L, 4L, 5L, 6L), ids(afterUpsert));
 
-            assertEquals(
-                    "Carol-updated",
-                    findById(afterUpsert, 3L).get("name")
-            );
-
-            // -----------------------------------------------------------------
-            // 6. Time travel
-            // -----------------------------------------------------------------
+            assertEquals("Carol-updated", findById(afterUpsert, 3L).get("name"));
 
             Snapshot historical = table.snapshot(1);
 
@@ -136,45 +64,23 @@ class DeltaTableArchitectureVerificationTest {
 
             List<Row> historicalRows = table.readRows(1);
 
-            assertEquals(
-                    Set.of(1L, 2L, 3L, 4L, 5L),
-                    ids(historicalRows)
-            );
-
-            // -----------------------------------------------------------------
-            // 7. Schema evolution
-            // -----------------------------------------------------------------
+            assertEquals(Set.of(1L, 2L, 3L, 4L, 5L), ids(historicalRows));
 
             TableSchema evolved = schemaWithCity();
 
-            long evolutionVersion = table.evolveSchema(
-                    evolved,
-                    "architecture verification"
-            );
+            long evolutionVersion = table.evolveSchema(evolved, "architecture verification");
 
             assertEquals(4, evolutionVersion);
 
-            assertEquals(
-                    evolved.json(),
-                    table.currentSchema().json()
-            );
-
-            // Existing rows must expose the new nullable field as null.
+            assertEquals(evolved.json(), table.currentSchema().json());
 
             List<Row> afterEvolution = table.readRows();
 
-            assertEquals(
-                    Set.of(1L, 3L, 4L, 5L, 6L),
-                    ids(afterEvolution)
-            );
+            assertEquals(Set.of(1L, 3L, 4L, 5L, 6L), ids(afterEvolution));
 
             for (Row row : afterEvolution) {
                 assertNull(row.get("city"));
             }
-
-            // -----------------------------------------------------------------
-            // 8. Append using evolved schema
-            // -----------------------------------------------------------------
 
             long v5 = table.appendRows(
                     List.of(
@@ -202,10 +108,6 @@ class DeltaTableArchitectureVerificationTest {
                     findById(afterEvolvedAppend, 7L).get("city")
             );
 
-            // -----------------------------------------------------------------
-            // 9. Checkpoint
-            // -----------------------------------------------------------------
-
             long versionBeforeCheckpoint = table.version();
 
             table.checkpoint();
@@ -230,11 +132,6 @@ class DeltaTableArchitectureVerificationTest {
                     evolved.json(),
                     table.currentSchema().json()
             );
-
-            // -----------------------------------------------------------------
-            // 10. Optimize
-            // -----------------------------------------------------------------
-
             long beforeOptimizeVersion = table.version();
 
             long optimizeVersion = table.optimize();
@@ -247,10 +144,6 @@ class DeltaTableArchitectureVerificationTest {
                     Set.of(1L, 3L, 4L, 5L, 6L, 7L),
                     ids(table.readRows())
             );
-
-            // -----------------------------------------------------------------
-            // 11. Transaction log
-            // -----------------------------------------------------------------
 
             List<VersionedLogRecord> records = table.tail(-1);
 
@@ -269,9 +162,6 @@ class DeltaTableArchitectureVerificationTest {
                 );
             }
 
-            // -----------------------------------------------------------------
-            // 12. Final state
-            // -----------------------------------------------------------------
 
             List<Row> finalRows = table.readRows();
 
@@ -294,10 +184,6 @@ class DeltaTableArchitectureVerificationTest {
             deleteRecursively(root);
         }
     }
-
-    // -------------------------------------------------------------------------
-    // Historical snapshots remain stable after maintenance
-    // -------------------------------------------------------------------------
 
     @Test
     void historicalSnapshotsRemainStableAfterLaterMaintenance()
@@ -326,8 +212,6 @@ class DeltaTableArchitectureVerificationTest {
                     row(schema, 3L, "Carol", 35)
             ));
 
-            // Version 0 must remain unchanged after a later append.
-
             assertEquals(
                     Set.of(1L, 2L),
                     ids(table.readRows(v0))
@@ -335,14 +219,10 @@ class DeltaTableArchitectureVerificationTest {
 
             table.optimize();
 
-            // Maintenance must not alter the historical snapshot.
-
             assertEquals(
                     Set.of(1L, 2L),
                     ids(table.readRows(v0))
             );
-
-            // Current table must contain all rows.
 
             assertEquals(
                     Set.of(1L, 2L, 3L),
@@ -353,10 +233,6 @@ class DeltaTableArchitectureVerificationTest {
             deleteRecursively(root);
         }
     }
-
-    // -------------------------------------------------------------------------
-    // Checkpoint does not change semantics
-    // -------------------------------------------------------------------------
 
     @Test
     void checkpointDoesNotChangeTableSemantics() throws Exception {
@@ -400,9 +276,6 @@ class DeltaTableArchitectureVerificationTest {
         }
     }
 
-    // -------------------------------------------------------------------------
-    // Schema definitions
-    // -------------------------------------------------------------------------
 
     private static TableSchema schema() {
         return TableSchema.fromJson("""
@@ -433,10 +306,6 @@ class DeltaTableArchitectureVerificationTest {
                 """);
     }
 
-    // -------------------------------------------------------------------------
-    // Row helpers
-    // -------------------------------------------------------------------------
-
     private static Row row(
             TableSchema schema,
             long id,
@@ -466,10 +335,6 @@ class DeltaTableArchitectureVerificationTest {
 
         return Row.of(schema, values);
     }
-
-    // -------------------------------------------------------------------------
-    // Assertions / utilities
-    // -------------------------------------------------------------------------
 
     private static Set<Long> ids(List<Row> rows) {
         Set<Long> result = new HashSet<>();

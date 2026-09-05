@@ -19,11 +19,9 @@ class S3StorageTest {
         try (S3Storage storage = new S3Storage("bucket", "tables/demo", fake)) {
             assertTrue(storage.create("_delta_log/00000000000000000000.json", "a".getBytes(StandardCharsets.UTF_8)));
             assertFalse(storage.create("_delta_log/00000000000000000000.json", "b".getBytes(StandardCharsets.UTF_8)));
-            assertArrayEquals("a".getBytes(StandardCharsets.UTF_8),
-                    storage.read("_delta_log/00000000000000000000.json"));
-            assertTrue(storage.supportsEventualConsistency());
-            assertEquals(List.of("_delta_log/00000000000000000000.json"),
-                    storage.list("_delta_log"));
+            assertArrayEquals("a".getBytes(StandardCharsets.UTF_8), storage.read("_delta_log/00000000000000000000.json"));
+            assertFalse(storage.supportsEventualConsistency());
+            assertEquals(List.of("_delta_log/00000000000000000000.json"), storage.list("_delta_log"));
         }
     }
 
@@ -34,9 +32,7 @@ class S3StorageTest {
             storage.write("a/00000000000000000000.json", new byte[]{0});
             storage.write("a/00000000000000000002.json", new byte[]{0});
             storage.write("a/00000000000000000001.json", new byte[]{0});
-            assertEquals(
-                    List.of("a/00000000000000000001.json", "a/00000000000000000002.json"),
-                    storage.listAfter("a", "a/00000000000000000000.json"));
+            assertEquals(List.of("a/00000000000000000001.json", "a/00000000000000000002.json"), storage.listAfter("a", "a/00000000000000000000.json"));
         }
     }
 
@@ -74,9 +70,7 @@ class S3StorageTest {
             return objects.containsKey(key);
         }
         @Override public List<String> list(String bucket, String prefix, String startAfter) {
-            return objects.keySet().stream()
-                    .filter(k -> k.startsWith(prefix) && (startAfter == null || k.compareTo(startAfter) > 0))
-                    .toList();
+            return objects.keySet().stream().filter(k -> k.startsWith(prefix) && (startAfter == null || k.compareTo(startAfter) > 0)).toList();
         }
         @Override public void delete(String bucket, String key) { objects.remove(key); }
         @Override public long size(String bucket, String key) { return objects.get(key).data.length; }

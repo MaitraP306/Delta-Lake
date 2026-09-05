@@ -8,15 +8,8 @@ class DeltaCacheVerificationTest {
 
     @Test
     void rejectsInvalidCapacity() {
-        assertThrows(
-                IllegalArgumentException.class,
-                () -> new DeltaCache<String, String>(0)
-        );
-
-        assertThrows(
-                IllegalArgumentException.class,
-                () -> new DeltaCache<String, String>(-1)
-        );
+        assertThrows(IllegalArgumentException.class, () -> new DeltaCache<String, String>(0));
+        assertThrows(IllegalArgumentException.class, () -> new DeltaCache<String, String>(-1));
     }
 
     @Test
@@ -54,17 +47,9 @@ class DeltaCacheVerificationTest {
     void rejectsNullKeyAndNullValue() {
         DeltaCache<String, String> cache = new DeltaCache<>(2);
 
-        assertThrows(
-                NullPointerException.class,
-                () -> cache.put(null, "value")
-        );
+        assertThrows(NullPointerException.class, () -> cache.put(null, "value"));
+        assertThrows(NullPointerException.class, () -> cache.put("key", null));
 
-        assertThrows(
-                NullPointerException.class,
-                () -> cache.put("key", null)
-        );
-
-        // Failed puts must not have inserted anything.
         assertEquals(0, cache.size());
         assertFalse(cache.containsKey("key"));
     }
@@ -77,11 +62,7 @@ class DeltaCacheVerificationTest {
         cache.put("b", "B");
 
         assertEquals(2, cache.size());
-
-        // Access "a", making it the most recently used entry.
         assertEquals("A", cache.get("a"));
-
-        // "b" is now the least recently used entry.
         cache.put("c", "C");
 
         assertEquals(2, cache.size());
@@ -119,12 +100,8 @@ class DeltaCacheVerificationTest {
         cache.put(1, "one");
         cache.put(2, "two");
         cache.put(3, "three");
-
-        // 1 becomes most recently used.
         assertEquals("one", cache.get(1));
 
-        // Current LRU order should effectively be:
-        // 2 (oldest), 3, 1 (newest)
         cache.put(4, "four");
 
         assertFalse(cache.containsKey(2));
@@ -156,8 +133,6 @@ class DeltaCacheVerificationTest {
         cache.put("a", "A");
         cache.put("b", "B");
 
-        // Replacing "a" counts as an access/update to the existing
-        // entry in LinkedHashMap access-order mode.
         cache.put("a", "A2");
 
         cache.put("c", "C");
@@ -208,11 +183,7 @@ class DeltaCacheVerificationTest {
 
         for (int i = 0; i < 100; i++) {
             cache.put(i, i);
-
-            assertTrue(
-                    cache.size() <= capacity,
-                    "Cache exceeded capacity after inserting key " + i
-            );
+            assertTrue(cache.size() <= capacity, "Cache exceeded capacity after inserting key " + i);
         }
 
         assertEquals(capacity, cache.size());

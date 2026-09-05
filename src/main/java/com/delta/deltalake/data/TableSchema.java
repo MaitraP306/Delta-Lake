@@ -61,8 +61,7 @@ public final class TableSchema {
     public boolean requiresPhysicalRewriteFrom(TableSchema previous) {
         Objects.requireNonNull(previous);
         for (Schema.Field oldField : previous.avroSchema.getFields()) {
-            boolean retained = avroSchema.getField(oldField.name()) != null
-                    || avroSchema.getFields().stream().anyMatch(field -> field.aliases().contains(oldField.name()));
+            boolean retained = avroSchema.getField(oldField.name()) != null || avroSchema.getFields().stream().anyMatch(field -> field.aliases().contains(oldField.name()));
             if (!retained) return true;
         }
         return false;
@@ -110,9 +109,7 @@ public final class TableSchema {
         for (Schema.Field oldField : oldRecord.getFields()) {
             Schema.Field newField = newRecord.getField(oldField.name());
             if (newField == null) {
-                newField = newRecord.getFields().stream()
-                        .filter(f -> f.aliases().contains(oldField.name()))
-                        .findFirst().orElse(null);
+                newField = newRecord.getFields().stream().filter(f -> f.aliases().contains(oldField.name())).findFirst().orElse(null);
             }
             if (newField == null) return false;
             if (!isTypeEvolutionCompatible(oldField.schema(), newField.schema())) return false;

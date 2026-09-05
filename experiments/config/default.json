@@ -1,0 +1,9 @@
+{
+  "backend": "local",
+  "files": 10,
+  "rowsPerFile": 100,
+  "warmups": 3,
+  "iterations": 10,
+  "region": "us-east-2",
+  "s3PrefixRoot": "phase13"
+}

@@ -25,6 +25,10 @@ import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.*;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 import java.util.function.BiFunction;
 import java.util.function.Function;
 import java.util.function.Predicate;
@@ -131,16 +135,104 @@ public final class DeltaTable {
     }
 
     private static void sleepBeforeCommitRetry(int failedAttempt) throws IOException {
-        long exponential = COMMIT_RETRY_INITIAL_BACKOFF_MILLIS
-                << Math.min(failedAttempt, 5);
+        long exponential = COMMIT_RETRY_INITIAL_BACKOFF_MILLIS << Math.min(failedAttempt, 5);
         long cap = Math.min(COMMIT_RETRY_MAX_BACKOFF_MILLIS, exponential);
-        long jitter = java.util.concurrent.ThreadLocalRandom.current()
-                .nextLong(cap + 1);
+        long jitter = java.util.concurrent.ThreadLocalRandom.current().nextLong(cap + 1);
         try {
             Thread.sleep(jitter);
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
             throw new IOException("Interrupted while backing off after a concurrent commit conflict", e);
+        }
+    }
+
+    public long appendRowsParallel(List<List<Row>> groups, int uploadThreads) throws IOException {
+        Objects.requireNonNull(groups, "groups");
+        if (uploadThreads <= 0) {
+            throw new IllegalArgumentException("uploadThreads must be > 0");
+        }
+
+        List<List<Row>> nonEmptyGroups = groups.stream().filter(group -> group != null && !group.isEmpty()).toList();
+
+        if (nonEmptyGroups.isEmpty()) {
+            return transactionLog.latestVersion();
+        }
+
+        TableSchema writeSchema = exists() ? tableSchema() : nonEmptyGroups.get(0).get(0).schema();
+
+        for (List<Row> group : nonEmptyGroups) {
+            validateRows(group);
+            validateRowsAgainstSchema(group, writeSchema);
+        }
+
+        int threads = Math.min(uploadThreads, nonEmptyGroups.size());
+        ExecutorService executor = Executors.newFixedThreadPool(threads);
+        List<String> writtenPaths = Collections.synchronizedList(new ArrayList<>());
+
+        try {
+            List<Future<AddFile>> futures = new ArrayList<>(nonEmptyGroups.size());
+
+            for (List<Row> group : nonEmptyGroups) {
+                futures.add(executor.submit(() -> {
+                    String path = writeDataFile(group, writeSchema);
+                    writtenPaths.add(path);
+                    return addFile(path, group, writeSchema, true);
+                }));
+            }
+
+            List<AddFile> addFiles = new ArrayList<>(futures.size());
+            for (Future<AddFile> future : futures) {
+                addFiles.add(future.get());
+            }
+
+            long latest = transactionLog.latestVersion();
+            if (latest >= 0) {
+                assertSupportedProtocol(snapshotManager.loadSnapshot(latest).protocol());
+            }
+
+            List<LogRecord> actions = new ArrayList<>(addFiles.size() + 3);
+
+            if (latest < 0) {
+                actions.add(ActionCodec.encode(initialProtocol()));
+                actions.add(ActionCodec.encode(initialMetadata(writeSchema)));
+            }
+
+            for (AddFile addFile : addFiles) {
+                actions.add(ActionCodec.encode(addFile));
+            }
+
+            actions.add(ActionCodec.encode(new CommitInfo(System.currentTimeMillis(),"WRITE",Map.of("mode", "append", "parallel", "true", "files", Integer.toString(addFiles.size()), "uploadThreads", Integer.toString(threads)), null)));
+
+            long target = latest + 1;
+            if (!transactionLog.append(target, actions)) {
+                throw new IOException("Could not commit parallel append at version " + target);
+            }
+
+            checkpointBestEffort(target);
+            return target;
+
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            cleanup(writtenPaths);
+            throw new IOException("Parallel append was interrupted", e);
+
+        } catch (ExecutionException e) {
+            cleanup(writtenPaths);
+            Throwable cause = e.getCause();
+            if (cause instanceof IOException ioException) {
+                throw ioException;
+            }
+            if (cause instanceof RuntimeException runtimeException) {
+                throw runtimeException;
+            }
+            throw new IOException("Parallel append failed", cause);
+
+        } catch (IOException | RuntimeException e) {
+            cleanup(writtenPaths);
+            throw e;
+
+        } finally {
+            executor.shutdownNow();
         }
     }
 
@@ -381,8 +473,14 @@ public final class DeltaTable {
             List<LogRecord> actions = new ArrayList<>(); List<String> newPaths = new ArrayList<>();
             actions.add(ActionCodec.encode(new CommitInfo(System.currentTimeMillis(), "ZORDER", Map.of("columns", String.join(",", columns)), null)));
             for (String path : affectedPaths) actions.add(ActionCodec.encode(new RemoveFile(path, System.currentTimeMillis(), false)));
+
+            int targetRowsPerFile = Math.max(1,
+                    (int) Math.ceil((double) source.size() / Math.max(1, affectedPaths.size())));
             for (List<Row> group : partitionGroups(source).values()) {
-                String path = writeDataFile(group, schema); newPaths.add(path); actions.add(ActionCodec.encode(addFile(path, group, schema, false)));
+                for (int start = 0; start < group.size(); start += targetRowsPerFile) {
+                    List<Row> chunk = group.subList(start, Math.min(group.size(), start + targetRowsPerFile));
+                    String path = writeDataFile(chunk, schema); newPaths.add(path); actions.add(ActionCodec.encode(addFile(path, chunk, schema, false)));
+                }
             }
             OptimisticTransaction tx = new OptimisticTransaction(transactionLog, snapshotManager, snap);
             tx.readPaths(affectedPaths);
@@ -750,12 +848,26 @@ public final class DeltaTable {
         return result;
     }
     private static BigInteger zOrderKey(Row row, String[] columns, Map<String, Map<Object, Integer>> ranks) {
-        BigInteger key = BigInteger.ZERO; int bitWidth = 32;
-        for (int bit = bitWidth - 1; bit >= 0; bit--) for (int dimension = 0; dimension < columns.length; dimension++) {
-            Integer rank = ranks.get(columns[dimension]).get(normalizeComparable(row.get(columns[dimension]))); int unsigned = (rank == null ? 0 : rank) ^ Integer.MIN_VALUE;
-            if (((unsigned >>> bit) & 1) != 0) key = key.setBit((bitWidth - 1 - bit) * columns.length + (columns.length - 1 - dimension));
+        BigInteger key = BigInteger.ZERO;
+        final int bitWidth = 32;
+        for (int dimension = 0; dimension < columns.length; dimension++) {
+            Map<Object, Integer> dimensionRanks = ranks.get(columns[dimension]);
+            Integer rank = dimensionRanks.get(normalizeComparable(row.get(columns[dimension])));
+            long normalized = normalizeRank(rank == null ? 0 : rank, dimensionRanks.size());
+            for (int bit = bitWidth - 1; bit >= 0; bit--) {
+                if (((normalized >>> bit) & 1L) != 0) {
+                    int position = bit * columns.length + (columns.length - 1 - dimension);
+                    key = key.setBit(position);
+                }
+            }
         }
         return key;
+    }
+
+    private static long normalizeRank(int rank, int cardinality) {
+        if (cardinality <= 1) return 0L;
+        long numerator = Integer.toUnsignedLong(rank) * 0xFFFF_FFFFL;
+        return numerator / (cardinality - 1L);
     }
 
     private List<Row> readCandidateRows(Snapshot snap, Map<String, QueryRange> scope) throws IOException { List<Row> result = new ArrayList<>(); for (AddFile f : snap.activeFiles()) if (mayMatch(f, scope, snap.metadata().partitionColumns())) result.addAll(readDataFile(f.path())); return result; }
@@ -817,6 +929,8 @@ public final class DeltaTable {
     public record QueryRange(Object min, Object max) {
         public QueryRange { Objects.requireNonNull(min); Objects.requireNonNull(max); if (compare(min, max) > 0) throw new IllegalArgumentException("QueryRange min > max"); }
     }
+
+
 
     @SuppressWarnings("unchecked")
     private static int compareComparable(Object left, Object right) { return ((Comparable<Object>) left).compareTo(right); }

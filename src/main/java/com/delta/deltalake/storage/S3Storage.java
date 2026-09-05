@@ -93,7 +93,7 @@ public final class S3Storage implements Storage, AutoCloseable {
     }
 
     @Override
-    public boolean supportsEventualConsistency() { return true; }
+    public boolean supportsEventualConsistency() { return false; }
 
     @Override
     public long size(String key) throws IOException { return client.size(bucket, fullKey(key)); }

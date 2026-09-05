@@ -181,11 +181,8 @@ public final class CheckpointCodec {
         if (stats != null) {
             for (GenericRecord columnStat : stats) {
                 String column = columnStat.get("column").toString();
-
                 Schema.Field typeField = columnStat.getSchema().getField("valueType");
-                String valueType = typeField == null || columnStat.get(typeField.pos()) == null
-                        ? null
-                        : columnStat.get(typeField.pos()).toString();
+                String valueType = typeField == null || columnStat.get(typeField.pos()) == null ? null : columnStat.get(typeField.pos()).toString();
                 Object min = decodeStatValue(columnStat.get("min"), valueType);
                 Object max = decodeStatValue(columnStat.get("max"), valueType);
                 long nullCount = (Long) columnStat.get("nullCount");

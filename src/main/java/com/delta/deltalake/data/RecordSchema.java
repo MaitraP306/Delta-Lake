@@ -6,7 +6,7 @@ import org.apache.avro.generic.GenericRecord;
 
 public final class RecordSchema {
 
-    private static final Schema SCHEMA =new Schema.Parser().parse("""
+    private static final Schema SCHEMA = new Schema.Parser().parse("""
                     {
                       "type": "record",
                       "name": "Record",

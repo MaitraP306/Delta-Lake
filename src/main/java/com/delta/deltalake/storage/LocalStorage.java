@@ -82,14 +82,7 @@ public final class LocalStorage implements Storage {
         }
 
         try (Stream<Path> stream = Files.list(directory)) {
-            return stream
-                    .filter(Files::isRegularFile)
-                    .map(root::relativize)
-                    .map(Path::toString)
-                    .map(path -> path.replace(File.separator, "/"))
-                    .filter(key -> key.compareTo(startAfter) > 0)
-                    .sorted()
-                    .toList();
+            return stream.filter(Files::isRegularFile).map(root::relativize).map(Path::toString).map(path -> path.replace(File.separator, "/")).filter(key -> key.compareTo(startAfter) > 0).sorted().toList();
         }
     }
 

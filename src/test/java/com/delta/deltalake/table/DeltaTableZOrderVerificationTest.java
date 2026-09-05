@@ -516,6 +516,48 @@ class DeltaTableZOrderVerificationTest {
     }
 
     @Test
+    void zOrderBalancesMixedWidthDimensions() throws Exception {
+        LocalStorage storage = new LocalStorage(tempDir);
+        String schemaJson = """
+                {
+                  "type": "record",
+                  "name": "MixedWidthRow",
+                  "fields": [
+                    {"name": "ip", "type": "long"},
+                    {"name": "port", "type": "int"}
+                  ]
+                }
+                """;
+        TableSchema mixedSchema = new TableSchema(new Schema.Parser().parse(schemaJson));
+        DeltaTable table = DeltaTable.open(storage);
+        List<Row> rows = new ArrayList<>();
+        for (int ip = 0; ip < 256; ip++) {
+            for (int port = 0; port < 256; port++) {
+                rows.add(Row.of(mixedSchema, Map.of("ip", (long) ip, "port", port)));
+            }
+        }
+        for (int i = 0; i < rows.size(); i += 256) {
+            table.appendRows(rows.subList(i, i + 256));
+        }
+
+        table.optimizeZOrder("ip", "port");
+
+        long portSpanningAllFiles = table.snapshot().activeFiles().stream()
+                .filter(file -> {
+                    var stats = file.stats().columns().get("port");
+                    return stats != null
+                            && stats.min() instanceof Number min
+                            && stats.max() instanceof Number max
+                            && min.intValue() == 0
+                            && max.intValue() == 255;
+                })
+                .count();
+
+        assertTrue(portSpanningAllFiles < table.snapshot().fileCount(),
+                "Z-order should not leave a narrow 8-bit dimension spanning every output file");
+    }
+
+    @Test
     void zOrderCanUseSingleColumn()
             throws Exception {
 
@@ -614,6 +656,22 @@ class DeltaTableZOrderVerificationTest {
                 16,
                 table.readRows().size()
         );
+
+        // Z-order must interleave the significant bits from most to least
+        // significant. With a 4x4 grid and four rows per output file, the
+        // correct ordering places x=0 in exactly two file-stat ranges.
+        long filesContainingXZero = table.snapshot().activeFiles().stream()
+                .filter(file -> {
+                    var stats = file.stats().columns().get("x");
+                    return stats != null
+                            && stats.min() instanceof Number min
+                            && stats.max() instanceof Number max
+                            && min.intValue() <= 0
+                            && max.intValue() >= 0;
+                })
+                .count();
+
+        assertEquals(2, filesContainingXZero);
     }
 
     @Test
