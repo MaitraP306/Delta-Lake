@@ -3,6 +3,7 @@ package com.delta.deltalake.data;
 import org.apache.avro.generic.GenericRecord;
 import java.util.LinkedHashMap;
 
+/** Converts between table rows and the generic record representation used by the data layer. */
 public final class RecordCodec {
     private RecordCodec() {}
 

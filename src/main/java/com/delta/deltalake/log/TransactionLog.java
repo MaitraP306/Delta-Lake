@@ -9,6 +9,7 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 
+/** Persists versioned table actions and provides ordered transaction-log access. */
 public final class TransactionLog {
     public static final String LOG_DIRECTORY = "_delta_log";
     public static final String LAST_CHECKPOINT = LOG_DIRECTORY + "/_last_checkpoint";

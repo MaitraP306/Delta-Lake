@@ -14,6 +14,7 @@ import java.util.Objects;
 import java.util.Set;
 import java.util.function.Predicate;
 
+/** Validates and commits a transaction using optimistic concurrency control. */
 public final class OptimisticTransaction {
     private final TransactionLog transactionLog;
     private final SnapshotManager snapshotManager;

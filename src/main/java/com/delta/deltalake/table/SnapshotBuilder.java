@@ -6,6 +6,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
+/** Reconstructs table state by applying transaction-log actions in version order. */
 public final class SnapshotBuilder {
     private final Map<String, AddFile> activeFiles = new LinkedHashMap<>();
     private final Map<String, RemoveFile> tombstones = new LinkedHashMap<>();

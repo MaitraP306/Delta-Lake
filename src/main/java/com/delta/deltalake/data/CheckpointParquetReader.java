@@ -11,6 +11,7 @@ import java.nio.file.Files;
 import java.util.ArrayList;
 import java.util.List;
 
+/** Reads checkpoint state from the Parquet representation used by the checkpoint layer. */
 public final class CheckpointParquetReader {
 
     private CheckpointParquetReader() {}

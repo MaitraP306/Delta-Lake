@@ -23,6 +23,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
+/** Encodes and decodes checkpoint actions for compact table-state persistence. */
 public final class CheckpointCodec {
 
     private CheckpointCodec() {}

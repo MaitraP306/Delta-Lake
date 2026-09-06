@@ -11,6 +11,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Objects;
 
+/** Converts between the project's logical schema and Spark SQL schema types. */
 public final class SparkSchemaConverter {
     private SparkSchemaConverter() {}
 

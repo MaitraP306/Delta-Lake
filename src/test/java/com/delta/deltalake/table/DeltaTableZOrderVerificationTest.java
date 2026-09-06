@@ -48,471 +48,239 @@ class DeltaTableZOrderVerificationTest {
                 }
                 """;
 
-        return new TableSchema(
-                new Schema.Parser().parse(schemaJson)
-        );
+        return new TableSchema(new Schema.Parser().parse(schemaJson));
     }
 
-    private Row row(
-            TableSchema schema,
-            long id,
-            int x,
-            int y) {
+    private Row row(TableSchema schema, long id, int x, int y) {
 
-        return Row.of(
-                schema,
-                Map.of(
-                        "id", id,
-                        "x", x,
-                        "y", y,
-                        "value", "row-" + id
-                )
-        );
+        return Row.of(schema,Map.of("id", id, "x", x, "y", y, "value", "row-" + id));
     }
 
-    private DeltaTable createMultiFileTable(
-            LocalStorage storage,
-            TableSchema schema) throws Exception {
+    private DeltaTable createMultiFileTable(LocalStorage storage, TableSchema schema) throws Exception {
 
-        DeltaTable table =
-                DeltaTable.open(storage);
+        DeltaTable table = DeltaTable.open(storage);
 
-        /*
-         * Five independent appends -> five active files.
-         */
         for (int i = 0; i < 5; i++) {
-            table.appendRows(
-                    List.of(
-                            row(
-                                    schema,
-                                    i * 2L,
-                                    i,
-                                    4 - i
-                            ),
-                            row(
-                                    schema,
-                                    i * 2L + 1,
-                                    i,
-                                    i
-                            )
-                    )
-            );
+            table.appendRows(List.of(row(schema, i * 2L, i, 4 - i), row(schema, i * 2L + 1, i, i)));
         }
 
         return table;
     }
 
     @Test
-    void zOrderRejectsNoColumns()
-            throws Exception {
+    void zOrderRejectsNoColumns() throws Exception {
 
-        LocalStorage storage =
-                new LocalStorage(tempDir);
+        LocalStorage storage = new LocalStorage(tempDir);
 
-        TableSchema schema =
-                schema();
+        TableSchema schema = schema();
 
-        DeltaTable table =
-                DeltaTable.open(storage);
+        DeltaTable table = DeltaTable.open(storage);
 
-        table.appendRows(
-                List.of(
-                        row(schema, 1, 1, 1)
-                )
-        );
+        table.appendRows(List.of(row(schema, 1, 1, 1)));
 
-        assertThrows(
-                IllegalArgumentException.class,
-                () -> table.optimizeZOrder()
-        );
+        assertThrows(IllegalArgumentException.class, () -> table.optimizeZOrder());
     }
 
     @Test
-    void zOrderRejectsUnknownColumn()
-            throws Exception {
+    void zOrderRejectsUnknownColumn() throws Exception {
 
-        LocalStorage storage =
-                new LocalStorage(tempDir);
+        LocalStorage storage = new LocalStorage(tempDir);
 
-        TableSchema schema =
-                schema();
+        TableSchema schema = schema();
 
-        DeltaTable table =
-                DeltaTable.open(storage);
+        DeltaTable table = DeltaTable.open(storage);
 
-        table.appendRows(
-                List.of(
-                        row(schema, 1, 1, 1)
-                )
-        );
+        table.appendRows(List.of(row(schema, 1, 1, 1)));
 
-        assertThrows(
-                IllegalArgumentException.class,
-                () -> table.optimizeZOrder("does_not_exist")
-        );
+        assertThrows(IllegalArgumentException.class, () -> table.optimizeZOrder("does_not_exist"));
     }
 
     @Test
-    void zOrderRejectsDuplicateColumn()
-            throws Exception {
+    void zOrderRejectsDuplicateColumn() throws Exception {
 
-        LocalStorage storage =
-                new LocalStorage(tempDir);
+        LocalStorage storage = new LocalStorage(tempDir);
 
-        TableSchema schema =
-                schema();
+        TableSchema schema = schema();
 
-        DeltaTable table =
-                DeltaTable.open(storage);
+        DeltaTable table = DeltaTable.open(storage);
 
-        table.appendRows(
-                List.of(
-                        row(schema, 1, 1, 1)
-                )
-        );
+        table.appendRows(List.of(row(schema, 1, 1, 1)));
 
-        assertThrows(
-                IllegalArgumentException.class,
-                () -> table.optimizeZOrder("x", "x")
-        );
+        assertThrows(IllegalArgumentException.class, () -> table.optimizeZOrder("x", "x"));
     }
 
     @Test
-    void zOrderOnNonexistentTableThrows()
-            throws Exception {
+    void zOrderOnNonexistentTableThrows() throws Exception {
 
-        LocalStorage storage =
-                new LocalStorage(tempDir);
+        LocalStorage storage = new LocalStorage(tempDir);
 
-        DeltaTable table =
-                DeltaTable.open(storage);
+        DeltaTable table = DeltaTable.open(storage);
 
         assertFalse(table.exists());
 
-        assertThrows(
-                IllegalStateException.class,
-                () -> table.optimizeZOrder("x")
-        );
+        assertThrows(IllegalStateException.class, () -> table.optimizeZOrder("x"));
 
         assertFalse(table.exists());
     }
 
     @Test
-    void zOrderCreatesNewVersion()
-            throws Exception {
+    void zOrderCreatesNewVersion() throws Exception {
 
-        LocalStorage storage =
-                new LocalStorage(tempDir);
+        LocalStorage storage = new LocalStorage(tempDir);
 
-        TableSchema schema =
-                schema();
+        TableSchema schema = schema();
 
-        DeltaTable table =
-                createMultiFileTable(
-                        storage,
-                        schema
-                );
+        DeltaTable table = createMultiFileTable(storage, schema);
 
-        assertEquals(
-                4,
-                table.version()
-        );
+        assertEquals(4, table.version());
 
-        long result =
-                table.optimizeZOrder("x", "y");
+        long result = table.optimizeZOrder("x", "y");
 
-        assertEquals(
-                5,
-                result
-        );
+        assertEquals(5, result);
 
-        assertEquals(
-                5,
-                table.version()
-        );
+        assertEquals(5, table.version());
     }
 
     @Test
-    void zOrderPreservesAllRows()
-            throws Exception {
+    void zOrderPreservesAllRows() throws Exception {
 
-        LocalStorage storage =
-                new LocalStorage(tempDir);
+        LocalStorage storage = new LocalStorage(tempDir);
 
-        TableSchema schema =
-                schema();
+        TableSchema schema = schema();
 
-        DeltaTable table =
-                createMultiFileTable(
-                        storage,
-                        schema
-                );
+        DeltaTable table = createMultiFileTable(storage, schema);
 
-        List<String> before =
-                table.readRows()
-                        .stream()
-                        .map(this::rowIdentity)
-                        .sorted()
-                        .toList();
+        List<String> before = table.readRows().stream().map(this::rowIdentity).sorted().toList();
 
         table.optimizeZOrder("x", "y");
 
-        List<String> after =
-                table.readRows()
-                        .stream()
-                        .map(this::rowIdentity)
-                        .sorted()
-                        .toList();
+        List<String> after = table.readRows().stream().map(this::rowIdentity).sorted().toList();
 
-        assertEquals(
-                before,
-                after
-        );
+        assertEquals(before, after);
 
-        assertEquals(
-                10,
-                after.size()
-        );
+        assertEquals(10, after.size());
     }
 
     @Test
-    void zOrderPreservesValues()
-            throws Exception {
+    void zOrderPreservesValues() throws Exception {
 
-        LocalStorage storage =
-                new LocalStorage(tempDir);
+        LocalStorage storage = new LocalStorage(tempDir);
 
-        TableSchema schema =
-                schema();
+        TableSchema schema = schema();
 
-        DeltaTable table =
-                createMultiFileTable(
-                        storage,
-                        schema
-                );
+        DeltaTable table = createMultiFileTable(storage, schema);
 
-        Map<Long, String> before =
-                new HashMap<>();
+        Map<Long, String> before = new HashMap<>();
 
         for (Row row : table.readRows()) {
-            before.put(
-                    ((Number) row.get("id")).longValue(),
-                    rowIdentity(row)
-            );
+            before.put(((Number) row.get("id")).longValue(), rowIdentity(row));
         }
 
         table.optimizeZOrder("x", "y");
 
-        Map<Long, String> after =
-                new HashMap<>();
+        Map<Long, String> after = new HashMap<>();
 
         for (Row row : table.readRows()) {
-            after.put(
-                    ((Number) row.get("id")).longValue(),
-                    rowIdentity(row)
-            );
+            after.put(((Number) row.get("id")).longValue(), rowIdentity(row));
         }
 
-        assertEquals(
-                before,
-                after
-        );
+        assertEquals(before, after);
     }
 
     @Test
-    void zOrderMakesOldFilesInactive()
-            throws Exception {
+    void zOrderMakesOldFilesInactive() throws Exception {
 
-        LocalStorage storage =
-                new LocalStorage(tempDir);
+        LocalStorage storage = new LocalStorage(tempDir);
 
-        TableSchema schema =
-                schema();
+        TableSchema schema = schema();
 
-        DeltaTable table =
-                createMultiFileTable(
-                        storage,
-                        schema
-                );
+        DeltaTable table = createMultiFileTable(storage, schema);
 
-        List<String> oldPaths =
-                table.snapshot()
-                        .activeFiles()
-                        .stream()
-                        .map(AddFile::path)
-                        .toList();
+        List<String> oldPaths = table.snapshot().activeFiles().stream().map(AddFile::path).toList();
 
         table.optimizeZOrder("x", "y");
 
-        List<String> newPaths =
-                table.snapshot()
-                        .activeFiles()
-                        .stream()
-                        .map(AddFile::path)
-                        .toList();
+        List<String> newPaths = table.snapshot().activeFiles().stream().map(AddFile::path).toList();
 
         for (String oldPath : oldPaths) {
-            assertFalse(
-                    newPaths.contains(oldPath)
-            );
+            assertFalse(newPaths.contains(oldPath));
         }
     }
 
     @Test
-    void zOrderCreatesTombstonesForOldFiles()
-            throws Exception {
+    void zOrderCreatesTombstonesForOldFiles() throws Exception {
 
-        LocalStorage storage =
-                new LocalStorage(tempDir);
+        LocalStorage storage = new LocalStorage(tempDir);
 
-        TableSchema schema =
-                schema();
+        TableSchema schema = schema();
 
-        DeltaTable table =
-                createMultiFileTable(
-                        storage,
-                        schema
-                );
+        DeltaTable table = createMultiFileTable(storage, schema);
 
-        List<String> oldPaths =
-                table.snapshot()
-                        .activeFiles()
-                        .stream()
-                        .map(AddFile::path)
-                        .toList();
+        List<String> oldPaths = table.snapshot().activeFiles().stream().map(AddFile::path).toList();
 
         table.optimizeZOrder("x", "y");
 
         for (String oldPath : oldPaths) {
 
-            assertTrue(
-                    table.snapshot()
-                            .tombstones()
-                            .stream()
-                            .anyMatch(
-                                    remove ->
-                                            remove.path()
-                                                    .equals(oldPath)
-                            )
-            );
+            assertTrue(table.snapshot().tombstones().stream().anyMatch(remove -> remove.path().equals(oldPath)));
         }
     }
 
     @Test
-    void zOrderDoesNotPhysicallyDeleteOldFiles()
-            throws Exception {
+    void zOrderDoesNotPhysicallyDeleteOldFiles() throws Exception {
 
-        LocalStorage storage =
-                new LocalStorage(tempDir);
+        LocalStorage storage = new LocalStorage(tempDir);
 
-        TableSchema schema =
-                schema();
+        TableSchema schema = schema();
 
-        DeltaTable table =
-                createMultiFileTable(
-                        storage,
-                        schema
-                );
+        DeltaTable table = createMultiFileTable(storage, schema);
 
-        List<String> oldPaths =
-                table.snapshot()
-                        .activeFiles()
-                        .stream()
-                        .map(AddFile::path)
-                        .toList();
+        List<String> oldPaths = table.snapshot().activeFiles().stream().map(AddFile::path).toList();
 
         table.optimizeZOrder("x", "y");
 
         for (String path : oldPaths) {
-            assertTrue(
-                    Files.exists(
-                            tempDir.resolve(path)
-                    )
-            );
+            assertTrue(Files.exists(tempDir.resolve(path)));
         }
     }
 
     @Test
-    void zOrderOutputFilesHaveDataChangeFalse()
-            throws Exception {
+    void zOrderOutputFilesHaveDataChangeFalse() throws Exception {
 
-        LocalStorage storage =
-                new LocalStorage(tempDir);
+        LocalStorage storage = new LocalStorage(tempDir);
 
-        TableSchema schema =
-                schema();
+        TableSchema schema = schema();
 
-        DeltaTable table =
-                createMultiFileTable(
-                        storage,
-                        schema
-                );
+        DeltaTable table = createMultiFileTable(storage, schema);
 
         table.optimizeZOrder("x", "y");
 
-        assertFalse(
-                table.snapshot()
-                        .activeFiles()
-                        .isEmpty()
-        );
+        assertFalse(table.snapshot().activeFiles().isEmpty());
 
-        for (AddFile file :
-                table.snapshot().activeFiles()) {
+        for (AddFile file : table.snapshot().activeFiles()) {
 
-            assertFalse(
-                    file.dataChange()
-            );
+            assertFalse(file.dataChange());
         }
     }
 
     @Test
-    void zOrderPreservesQueryResults()
-            throws Exception {
+    void zOrderPreservesQueryResults() throws Exception {
 
-        LocalStorage storage =
-                new LocalStorage(tempDir);
+        LocalStorage storage = new LocalStorage(tempDir);
 
-        TableSchema schema =
-                schema();
+        TableSchema schema = schema();
 
-        DeltaTable table =
-                createMultiFileTable(
-                        storage,
-                        schema
-                );
+        DeltaTable table = createMultiFileTable(storage, schema);
 
-        Map<String, DeltaTable.QueryRange> predicate =
-                Map.of(
-                        "x",
-                        new DeltaTable.QueryRange(1, 3),
-                        "y",
-                        new DeltaTable.QueryRange(1, 3)
-                );
+        Map<String, DeltaTable.QueryRange> predicate = Map.of("x", new DeltaTable.QueryRange(1, 3), "y", new DeltaTable.QueryRange(1, 3));
 
-        List<String> before =
-                table.queryRows(predicate)
-                        .stream()
-                        .map(this::rowIdentity)
-                        .sorted()
-                        .toList();
+        List<String> before = table.queryRows(predicate).stream().map(this::rowIdentity).sorted().toList();
 
-        table.optimizeZOrder(
-                predicate,
-                "x",
-                "y"
-        );
+        table.optimizeZOrder(predicate, "x", "y");
 
-        List<String> after =
-                table.queryRows(predicate)
-                        .stream()
-                        .map(this::rowIdentity)
-                        .sorted()
-                        .toList();
+        List<String> after = table.queryRows(predicate).stream().map(this::rowIdentity).sorted().toList();
 
-        assertEquals(
-                before,
-                after
-        );
+        assertEquals(before, after);
     }
 
     @Test
@@ -545,129 +313,65 @@ class DeltaTableZOrderVerificationTest {
         long portSpanningAllFiles = table.snapshot().activeFiles().stream()
                 .filter(file -> {
                     var stats = file.stats().columns().get("port");
-                    return stats != null
-                            && stats.min() instanceof Number min
-                            && stats.max() instanceof Number max
-                            && min.intValue() == 0
-                            && max.intValue() == 255;
+                    return stats != null && stats.min() instanceof Number min && stats.max() instanceof Number max && min.intValue() == 0 && max.intValue() == 255;
                 })
                 .count();
 
-        assertTrue(portSpanningAllFiles < table.snapshot().fileCount(),
-                "Z-order should not leave a narrow 8-bit dimension spanning every output file");
+        assertTrue(portSpanningAllFiles < table.snapshot().fileCount(), "Z-order should not leave a narrow 8-bit dimension spanning every output file");
     }
 
     @Test
-    void zOrderCanUseSingleColumn()
-            throws Exception {
+    void zOrderCanUseSingleColumn() throws Exception {
 
-        LocalStorage storage =
-                new LocalStorage(tempDir);
+        LocalStorage storage = new LocalStorage(tempDir);
 
-        TableSchema schema =
-                schema();
+        TableSchema schema = schema();
 
-        DeltaTable table =
-                createMultiFileTable(
-                        storage,
-                        schema
-                );
+        DeltaTable table = createMultiFileTable(storage, schema);
 
-        List<String> before =
-                table.readRows()
-                        .stream()
-                        .map(this::rowIdentity)
-                        .sorted()
-                        .toList();
+        List<String> before = table.readRows().stream().map(this::rowIdentity).sorted().toList();
 
         table.optimizeZOrder("x");
 
-        List<String> after =
-                table.readRows()
-                        .stream()
-                        .map(this::rowIdentity)
-                        .sorted()
-                        .toList();
+        List<String> after = table.readRows().stream().map(this::rowIdentity).sorted().toList();
 
-        assertEquals(
-                before,
-                after
-        );
+        assertEquals(before, after);
     }
 
     @Test
-    void zOrderSupportsMultipleDimensions()
-            throws Exception {
+    void zOrderSupportsMultipleDimensions() throws Exception {
 
-        LocalStorage storage =
-                new LocalStorage(tempDir);
+        LocalStorage storage = new LocalStorage(tempDir);
 
-        TableSchema schema =
-                schema();
+        TableSchema schema = schema();
 
-        DeltaTable table =
-                DeltaTable.open(storage);
+        DeltaTable table = DeltaTable.open(storage);
 
-        List<Row> rows =
-                new ArrayList<>();
+        List<Row> rows = new ArrayList<>();
 
         int id = 0;
 
-        /*
-         * Create a two-dimensional grid.
-         */
         for (int x = 0; x < 4; x++) {
             for (int y = 0; y < 4; y++) {
-                rows.add(
-                        row(
-                                schema,
-                                id++,
-                                x,
-                                y
-                        )
-                );
+                rows.add(row(schema, id++, x, y));
             }
         }
 
-        /*
-         * Put the rows into multiple physical files.
-         */
         for (int i = 0; i < rows.size(); i += 4) {
 
-            table.appendRows(
-                    rows.subList(
-                            i,
-                            Math.min(
-                                    rows.size(),
-                                    i + 4
-                            )
-                    )
-            );
+            table.appendRows(rows.subList(i, Math.min(rows.size(), i + 4)));
         }
 
-        assertEquals(
-                4,
-                table.snapshot().fileCount()
-        );
+        assertEquals(4, table.snapshot().fileCount());
 
         table.optimizeZOrder("x", "y");
 
-        assertEquals(
-                16,
-                table.readRows().size()
-        );
+        assertEquals(16, table.readRows().size());
 
-        // Z-order must interleave the significant bits from most to least
-        // significant. With a 4x4 grid and four rows per output file, the
-        // correct ordering places x=0 in exactly two file-stat ranges.
         long filesContainingXZero = table.snapshot().activeFiles().stream()
                 .filter(file -> {
                     var stats = file.stats().columns().get("x");
-                    return stats != null
-                            && stats.min() instanceof Number min
-                            && stats.max() instanceof Number max
-                            && min.intValue() <= 0
-                            && max.intValue() >= 0;
+                    return stats != null && stats.min() instanceof Number min && stats.max() instanceof Number max && min.intValue() <= 0 && max.intValue() >= 0;
                 })
                 .count();
 
@@ -675,140 +379,46 @@ class DeltaTableZOrderVerificationTest {
     }
 
     @Test
-    void scopedZOrderOnlyRewritesMatchingFiles()
-            throws Exception {
+    void scopedZOrderOnlyRewritesMatchingFiles() throws Exception {
 
-        LocalStorage storage =
-                new LocalStorage(tempDir);
+        LocalStorage storage = new LocalStorage(tempDir);
 
-        TableSchema schema =
-                schema();
+        TableSchema schema = schema();
 
-        DeltaTable table =
-                createMultiFileTable(
-                        storage,
-                        schema
-                );
+        DeltaTable table = createMultiFileTable(storage, schema);
 
-        Snapshot before =
-                table.snapshot();
+        Snapshot before = table.snapshot();
+        Map<String, DeltaTable.QueryRange> scope = Map.of("x", new DeltaTable.QueryRange(0, 1));
 
-        /*
-         * x=0..4 exists in the five files.
-         *
-         * Scope x=[0,1] should identify files whose
-         * statistics overlap that range.
-         */
-        Map<String, DeltaTable.QueryRange> scope =
-                Map.of(
-                        "x",
-                        new DeltaTable.QueryRange(0, 1)
-                );
+        List<String> affected = before.activeFiles().stream().filter(file -> file.stats() != null && file.stats().columns().get("x") != null && file.stats().columns().get("x").min() != null && file.stats().columns().get("x").max() != null && compare(file.stats().columns().get("x").max(), 0) >= 0 && compare(file.stats().columns().get("x").min(), 1) <= 0).map(AddFile::path).toList();
 
-        List<String> affected =
-                before.activeFiles()
-                        .stream()
-                        .filter(
-                                file ->
-                                        file.stats() != null
-                                                && file.stats()
-                                                .columns()
-                                                .get("x") != null
-                                                && file.stats()
-                                                .columns()
-                                                .get("x")
-                                                .min() != null
-                                                && file.stats()
-                                                .columns()
-                                                .get("x")
-                                                .max() != null
-                                                && compare(
-                                                        file.stats()
-                                                                .columns()
-                                                                .get("x")
-                                                                .max(),
-                                                        0
-                                                ) >= 0
-                                                && compare(
-                                                        file.stats()
-                                                                .columns()
-                                                                .get("x")
-                                                                .min(),
-                                                        1
-                                                ) <= 0
-                        )
-                        .map(AddFile::path)
-                        .toList();
+        table.optimizeZOrder(scope, "x", "y");
 
-        table.optimizeZOrder(
-                scope,
-                "x",
-                "y"
-        );
+        Snapshot after = table.snapshot();
 
-        Snapshot after =
-                table.snapshot();
-
-        /*
-         * Files selected by the scope should no longer
-         * be active.
-         */
         for (String path : affected) {
-            assertFalse(
-                    after.activeFiles()
-                            .stream()
-                            .anyMatch(
-                                    file ->
-                                            file.path()
-                                                    .equals(path)
-                            )
-            );
+            assertFalse(after.activeFiles().stream().anyMatch(file -> file.path().equals(path)));
         }
 
-        /*
-         * Files outside the scope should remain active.
-         */
         for (AddFile file : before.activeFiles()) {
 
             if (!affected.contains(file.path())) {
-
-                assertTrue(
-                        after.activeFiles()
-                                .stream()
-                                .anyMatch(
-                                        current ->
-                                                current.path()
-                                                        .equals(file.path())
-                                )
-                );
+                assertTrue(after.activeFiles().stream().anyMatch(current -> current.path().equals(file.path())));
             }
         }
     }
 
     private String rowIdentity(Row row) {
-        return row.get("id") + "|"
-                + row.get("x") + "|"
-                + row.get("y") + "|"
-                + row.get("value");
+        return row.get("id") + "|" + row.get("x") + "|" + row.get("y") + "|" + row.get("value");
     }
 
-    private static int compare(
-            Object left,
-            Object right) {
+    private static int compare(Object left, Object right) {
 
-        if (left instanceof Number l
-                && right instanceof Number r) {
+        if (left instanceof Number l && right instanceof Number r) {
 
-            return new java.math.BigDecimal(
-                    l.toString()
-            ).compareTo(
-                    new java.math.BigDecimal(
-                            r.toString()
-                    )
-            );
+            return new java.math.BigDecimal(l.toString()).compareTo(new java.math.BigDecimal(r.toString()));
         }
 
-        return ((Comparable<Object>) left)
-                .compareTo(right);
+        return ((Comparable<Object>) left).compareTo(right);
     }
 }

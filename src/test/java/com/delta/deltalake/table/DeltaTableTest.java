@@ -60,10 +60,7 @@ class DeltaTableTest {
         DeltaTable table = DeltaTable.open(new LocalStorage(Files.createTempDirectory("delta-upsert")));
         table.append(List.of(new Record(1, "Alice", 25), new Record(2, "Bob", 31)));
         table.upsert(List.of(new Record(2, "Robert", 32), new Record(3, "Cara", 22)));
-        assertEquals(List.of(
-                new Record(1, "Alice", 25),
-                new Record(2, "Robert", 32),
-                new Record(3, "Cara", 22)), table.readAll());
+        assertEquals(List.of(new Record(1, "Alice", 25), new Record(2, "Robert", 32), new Record(3, "Cara", 22)), table.readAll());
     }
 
     @Test
@@ -189,9 +186,7 @@ class DeltaTableTest {
         DeltaTable table = DeltaTable.open(new LocalStorage(Files.createTempDirectory("delta-generic-query")));
         table.append(List.of(new Record(1, "Alice", 20)));
         table.append(List.of(new Record(2, "Bob", 40)));
-        assertEquals(List.of(new Record(1, "Alice", 20)), table.query(Map.of(
-                "name", new DeltaTable.QueryRange("A", "Azz"),
-                "age", new DeltaTable.QueryRange(18, 30))));
+        assertEquals(List.of(new Record(1, "Alice", 20)), table.query(Map.of("name", new DeltaTable.QueryRange("A", "Azz"), "age", new DeltaTable.QueryRange(18, 30))));
     }
 
     @Test

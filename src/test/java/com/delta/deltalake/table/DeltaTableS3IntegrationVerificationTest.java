@@ -17,22 +17,16 @@ import static org.junit.jupiter.api.Assertions.*;
 
 class DeltaTableS3IntegrationVerificationTest {
 
-    private static final String BUCKET =
-            "delta-lake-experiments-263242277349";
+    private static final String BUCKET = "delta-lake-experiments-263242277349";
 
-    private static final String PREFIX =
-            "phase12/" + UUID.randomUUID();
+    private static final String PREFIX = "phase12/" + UUID.randomUUID();
 
     private S3Storage storage;
     private DeltaTable table;
 
     @BeforeEach
     void setUp() {
-        storage = new S3Storage(
-                BUCKET,
-                PREFIX,
-                Region.US_EAST_2
-        );
+        storage = new S3Storage(BUCKET, PREFIX, Region.US_EAST_2);
 
         table = DeltaTable.open(storage, 10);
     }
@@ -47,10 +41,7 @@ class DeltaTableS3IntegrationVerificationTest {
     void appendCreatesCompleteDeltaTableInS3() throws Exception {
         TableSchema schema = schema();
 
-        long version = table.appendRows(List.of(
-                row(schema, 1, "Alice", 25),
-                row(schema, 2, "Bob", 30)
-        ));
+        long version = table.appendRows(List.of(row(schema, 1, "Alice", 25), row(schema, 2, "Bob", 30)));
 
         assertEquals(0, version);
         assertEquals(0, table.version());
@@ -70,19 +61,13 @@ class DeltaTableS3IntegrationVerificationTest {
     void appendAndReadRoundTripThroughS3() throws Exception {
         TableSchema schema = schema();
 
-        table.appendRows(List.of(
-                row(schema, 1, "Alice", 25),
-                row(schema, 2, "Bob", 30),
-                row(schema, 3, "Charlie", 35)
-        ));
+        table.appendRows(List.of(row(schema, 1, "Alice", 25), row(schema, 2, "Bob", 30), row(schema, 3, "Charlie", 35)));
 
         List<Row> rows = table.readRows();
 
         assertEquals(3, rows.size());
 
-        Set<Long> ids = rows.stream()
-                .map(row -> ((Number) row.get("id")).longValue())
-                .collect(Collectors.toSet());
+        Set<Long> ids = rows.stream().map(row -> ((Number) row.get("id")).longValue()).collect(Collectors.toSet());
 
         assertEquals(Set.of(1L, 2L, 3L), ids);
     }
@@ -91,40 +76,19 @@ class DeltaTableS3IntegrationVerificationTest {
     void multipleAppendsCreateContiguousS3TransactionLog() throws Exception {
         TableSchema schema = schema();
 
-        assertEquals(
-                0,
-                table.appendRows(List.of(
-                        row(schema, 1, "Alice", 25)
-                ))
-        );
+        assertEquals(0, table.appendRows(List.of(row(schema, 1, "Alice", 25))));
 
-        assertEquals(
-                1,
-                table.appendRows(List.of(
-                        row(schema, 2, "Bob", 30)
-                ))
-        );
+        assertEquals(1, table.appendRows(List.of(row(schema, 2, "Bob", 30))));
 
-        assertEquals(
-                2,
-                table.appendRows(List.of(
-                        row(schema, 3, "Charlie", 35)
-                ))
-        );
+        assertEquals(2, table.appendRows(List.of(row(schema, 3, "Charlie", 35))));
 
         assertEquals(2, table.version());
 
-        assertTrue(storage.exists(
-                "_delta_log/00000000000000000000.json"
-        ));
+        assertTrue(storage.exists("_delta_log/00000000000000000000.json"));
 
-        assertTrue(storage.exists(
-                "_delta_log/00000000000000000001.json"
-        ));
+        assertTrue(storage.exists("_delta_log/00000000000000000001.json"));
 
-        assertTrue(storage.exists(
-                "_delta_log/00000000000000000002.json"
-        ));
+        assertTrue(storage.exists("_delta_log/00000000000000000002.json"));
 
         List<Row> rows = table.readRows();
 
@@ -135,81 +99,42 @@ class DeltaTableS3IntegrationVerificationTest {
     void snapshotAndTimeTravelWorkThroughS3() throws Exception {
         TableSchema schema = schema();
 
-        long v0 = table.appendRows(List.of(
-                row(schema, 1, "Alice", 25)
-        ));
+        long v0 = table.appendRows(List.of(row(schema, 1, "Alice", 25)));
 
-        long v1 = table.appendRows(List.of(
-                row(schema, 2, "Bob", 30)
-        ));
+        long v1 = table.appendRows(List.of(row(schema, 2, "Bob", 30)));
 
         assertEquals(0, v0);
         assertEquals(1, v1);
 
-        assertEquals(
-                2,
-                table.readRows().size()
-        );
+        assertEquals(2, table.readRows().size());
 
-        assertEquals(
-                1,
-                table.readRows(0).size()
-        );
+        assertEquals(1, table.readRows(0).size());
 
-        assertEquals(
-                2,
-                table.readRows(1).size()
-        );
+        assertEquals(2, table.readRows(1).size());
 
-        assertEquals(
-                1L,
-                ((Number) table.readRows(0)
-                        .get(0)
-                        .get("id"))
-                        .longValue()
-        );
+        assertEquals(1L, ((Number) table.readRows(0).get(0).get("id")).longValue());
     }
 
     @Test
     void queryAndDataSkippingWorkThroughS3() throws Exception {
         TableSchema schema = schema();
 
-        table.appendRows(List.of(
-                row(schema, 1, "Alice", 25),
-                row(schema, 2, "Bob", 30),
-                row(schema, 3, "Charlie", 35)
-        ));
+        table.appendRows(List.of(row(schema, 1, "Alice", 25), row(schema, 2, "Bob", 30), row(schema, 3, "Charlie", 35)));
 
-        List<Row> result = table.queryRows(
-                Map.of(
-                        "id",
-                        new DeltaTable.QueryRange(2, 2)
-                )
-        );
+        List<Row> result = table.queryRows(Map.of("id", new DeltaTable.QueryRange(2, 2)));
 
         assertEquals(1, result.size());
 
-        assertEquals(
-                2L,
-                ((Number) result.get(0)
-                        .get("id"))
-                        .longValue()
-        );
+        assertEquals(2L, ((Number) result.get(0).get("id")).longValue());
     }
 
     @Test
     void deleteWorksThroughS3() throws Exception {
         TableSchema schema = schema();
 
-        table.appendRows(List.of(
-                row(schema, 1, "Alice", 25),
-                row(schema, 2, "Bob", 30),
-                row(schema, 3, "Charlie", 35)
-        ));
+        table.appendRows(List.of(row(schema, 1, "Alice", 25), row(schema, 2, "Bob", 30), row(schema, 3, "Charlie", 35)));
 
-        long deleteVersion = table.deleteRows(
-                row -> ((Number) row.get("id")).longValue() == 2
-        );
+        long deleteVersion = table.deleteRows(row -> ((Number) row.get("id")).longValue() == 2);
 
         assertEquals(1, deleteVersion);
 
@@ -217,44 +142,26 @@ class DeltaTableS3IntegrationVerificationTest {
 
         assertEquals(2, rows.size());
 
-        Set<Long> ids = rows.stream()
-                .map(row -> ((Number) row.get("id")).longValue())
-                .collect(Collectors.toSet());
+        Set<Long> ids = rows.stream().map(row -> ((Number) row.get("id")).longValue()).collect(Collectors.toSet());
 
         assertEquals(Set.of(1L, 3L), ids);
 
-        assertEquals(
-                3,
-                table.readRows(0).size()
-        );
+        assertEquals(3, table.readRows(0).size());
     }
 
     @Test
     void upsertWorksThroughS3() throws Exception {
         TableSchema schema = schema();
 
-        table.appendRows(List.of(
-                row(schema, 1, "Alice", 25),
-                row(schema, 2, "Bob", 30)
-        ));
+        table.appendRows(List.of(row(schema, 1, "Alice", 25), row(schema, 2, "Bob", 30)));
 
-        table.upsertRows(
-                List.of(
-                        row(schema, 2, "Robert", 31),
-                        row(schema, 3, "Charlie", 35)
-                ),
-                "id"
-        );
+        table.upsertRows(List.of(row(schema, 2, "Robert", 31), row(schema, 3, "Charlie", 35)), "id");
 
         List<Row> rows = table.readRows();
 
         assertEquals(3, rows.size());
 
-        Map<Long, Row> byId = rows.stream()
-                .collect(Collectors.toMap(
-                        row -> ((Number) row.get("id")).longValue(),
-                        row -> row
-                ));
+        Map<Long, Row> byId = rows.stream().collect(Collectors.toMap(row -> ((Number) row.get("id")).longValue(), row -> row));
 
         assertEquals("Alice", byId.get(1L).get("name"));
         assertEquals("Robert", byId.get(2L).get("name"));
@@ -266,129 +173,78 @@ class DeltaTableS3IntegrationVerificationTest {
     void checkpointWorksThroughS3() throws Exception {
         S3Storage checkpointStorage = storage;
 
-        DeltaTable checkpointedTable =
-                DeltaTable.open(checkpointStorage, 2);
+        DeltaTable checkpointedTable = DeltaTable.open(checkpointStorage, 2);
 
         TableSchema schema = schema();
 
-        checkpointedTable.appendRows(List.of(
-                row(schema, 1, "Alice", 25)
-        ));
+        checkpointedTable.appendRows(List.of(row(schema, 1, "Alice", 25)));
 
-        checkpointedTable.appendRows(List.of(
-                row(schema, 2, "Bob", 30)
-        ));
+        checkpointedTable.appendRows(List.of(row(schema, 2, "Bob", 30)));
 
         assertEquals(1, checkpointedTable.version());
 
-        assertTrue(
-                checkpointStorage.exists(
-                        "_delta_log/_last_checkpoint"
-                )
-        );
+        assertTrue(checkpointStorage.exists("_delta_log/_last_checkpoint"));
 
-        assertTrue(
-                checkpointStorage.exists(
-                        "_delta_log/00000000000000000001.checkpoint.parquet"
-                )
-        );
+        assertTrue(checkpointStorage.exists("_delta_log/00000000000000000001.checkpoint.parquet"));
 
-        assertEquals(
-                2,
-                checkpointedTable.readRows().size()
-        );
+        assertEquals(2, checkpointedTable.readRows().size());
     }
 
     @Test
     void optimizeWorksThroughS3() throws Exception {
         TableSchema schema = schema();
 
-        table.appendRows(List.of(
-                row(schema, 1, "Alice", 25)
-        ));
+        table.appendRows(List.of(row(schema, 1, "Alice", 25)));
 
-        table.appendRows(List.of(
-                row(schema, 2, "Bob", 30)
-        ));
+        table.appendRows(List.of(row(schema, 2, "Bob", 30)));
 
-        table.appendRows(List.of(
-                row(schema, 3, "Charlie", 35)
-        ));
+        table.appendRows(List.of(row(schema, 3, "Charlie", 35)));
 
-        int filesBefore = table.snapshot()
-                .activeFiles()
-                .size();
+        int filesBefore = table.snapshot().activeFiles().size();
 
         assertEquals(3, filesBefore);
 
-        long optimizeVersion = table.optimize(
-                1024 * 1024
-        );
+        long optimizeVersion = table.optimize(1024 * 1024);
 
         assertTrue(optimizeVersion >= 3);
 
-        int filesAfter = table.snapshot()
-                .activeFiles()
-                .size();
+        int filesAfter = table.snapshot().activeFiles().size();
 
         assertEquals(1, filesAfter);
 
-        assertEquals(
-                3,
-                table.readRows().size()
-        );
+        assertEquals(3, table.readRows().size());
     }
 
     @Test
     void physicalS3ObjectsMatchActiveSnapshot() throws Exception {
         TableSchema schema = schema();
 
-        table.appendRows(List.of(
-                row(schema, 1, "Alice", 25)
-        ));
+        table.appendRows(List.of(row(schema, 1, "Alice", 25)));
 
-        table.appendRows(List.of(
-                row(schema, 2, "Bob", 30)
-        ));
+        table.appendRows(List.of(row(schema, 2, "Bob", 30)));
 
         Snapshot snapshot = table.snapshot();
 
-        Set<String> activeFiles = snapshot.activeFiles()
-                .stream()
-                .map(AddFile::path)
-                .collect(Collectors.toSet());
+        Set<String> activeFiles = snapshot.activeFiles().stream().map(AddFile::path).collect(Collectors.toSet());
 
-        List<String> physicalFiles = storage.list("data")
-                .stream()
-                .filter(path -> path.endsWith(".parquet"))
-                .toList();
+        List<String> physicalFiles = storage.list("data").stream().filter(path -> path.endsWith(".parquet")).toList();
 
-        assertEquals(
-                activeFiles,
-                new HashSet<>(physicalFiles)
-        );
+        assertEquals(activeFiles, new HashSet<>(physicalFiles));
     }
 
     @Test
     void transactionLogTailWorksThroughS3() throws Exception {
         TableSchema schema = schema();
 
-        table.appendRows(List.of(
-                row(schema, 1, "Alice", 25)
-        ));
+        table.appendRows(List.of(row(schema, 1, "Alice", 25)));
 
-        table.appendRows(List.of(
-                row(schema, 2, "Bob", 30)
-        ));
+        table.appendRows(List.of(row(schema, 2, "Bob", 30)));
 
-        List<VersionedLogRecord> records =
-                table.tail(-1);
+        List<VersionedLogRecord> records = table.tail(-1);
 
         assertFalse(records.isEmpty());
 
-        Set<Long> versions = records.stream()
-                .map(VersionedLogRecord::version)
-                .collect(Collectors.toSet());
+        Set<Long> versions = records.stream().map(VersionedLogRecord::version).collect(Collectors.toSet());
 
         assertEquals(Set.of(0L, 1L), versions);
     }
@@ -407,20 +263,8 @@ class DeltaTableS3IntegrationVerificationTest {
                 """);
     }
 
-    private static Row row(
-            TableSchema schema,
-            long id,
-            String name,
-            int age
-    ) {
-        return Row.of(
-                schema,
-                Map.of(
-                        "id", id,
-                        "name", name,
-                        "age", age
-                )
-        );
+    private static Row row(TableSchema schema, long id, String name, int age) {
+        return Row.of(schema, Map.of("id", id, "name", name, "age", age));
     }
 
     private void cleanupS3Prefix() throws Exception {
@@ -431,5 +275,5 @@ class DeltaTableS3IntegrationVerificationTest {
         for (String key : storage.list("_delta_log")) {
                 storage.delete(key);
         }
-        }
+    }
 }

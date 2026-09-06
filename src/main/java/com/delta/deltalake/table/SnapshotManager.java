@@ -9,6 +9,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 
 import java.io.IOException;
 
+/** Builds and caches consistent table snapshots from checkpoints and transaction-log actions. */
 public final class SnapshotManager {
     private final TransactionLog transactionLog;
     private final CheckpointManager checkpointManager;

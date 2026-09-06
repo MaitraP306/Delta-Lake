@@ -5,6 +5,7 @@ import org.apache.avro.LogicalType;
 
 import java.util.*;
 
+/** Represents the logical schema persisted with a Delta table. */
 public final class TableSchema {
     private final Schema avroSchema;
 

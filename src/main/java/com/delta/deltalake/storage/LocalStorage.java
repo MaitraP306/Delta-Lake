@@ -11,6 +11,7 @@ import java.util.List;
 import java.util.Objects;
 import java.util.stream.Stream;
 
+/** Filesystem-backed storage implementation used for local development and tests. */
 public final class LocalStorage implements Storage {
     private final Path root;
 

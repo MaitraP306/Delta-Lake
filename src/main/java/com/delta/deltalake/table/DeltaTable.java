@@ -33,6 +33,7 @@ import java.util.function.BiFunction;
 import java.util.function.Function;
 import java.util.function.Predicate;
 
+/** Coordinates table operations across the transaction log, snapshot state, data files, and storage backend. */
 public final class DeltaTable {
     private static final int MAX_COMMIT_RETRIES = 12;
     private static final long COMMIT_RETRY_INITIAL_BACKOFF_MILLIS = 10L;

@@ -11,6 +11,7 @@ import java.net.URI;
 import java.util.List;
 import java.util.Objects;
 
+/** Amazon S3-backed storage implementation for object-store table persistence. */
 public final class S3Storage implements Storage, AutoCloseable {
     private final String bucket;
     private final String prefix;

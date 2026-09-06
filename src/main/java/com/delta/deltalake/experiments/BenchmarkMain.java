@@ -19,6 +19,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
+/** Command-line entry point for storage, metadata, data-skipping, and Z-order experiments. */
 public final class BenchmarkMain {
     private BenchmarkMain() {}
 
@@ -71,6 +72,7 @@ public final class BenchmarkMain {
         }
     }
 
+    // Generation is kept separate from measurement so upload cost does not leak into benchmark timings.
     private static void generate(Config c) throws Exception {
         if (c.files <= 0 || c.rowsPerFile <= 0) {
             throw new IllegalArgumentException("files and rowsPerFile must be > 0");
@@ -123,6 +125,7 @@ public final class BenchmarkMain {
         }
     }
 
+    // Compare physical directory discovery with reconstruction from Delta metadata.
     private static BenchmarkResult benchmarkMetadata(Config c) throws Exception {
         try (StorageHandle handle = openStorage(c)) {
             Storage storage = handle.storage();
@@ -146,6 +149,7 @@ public final class BenchmarkMain {
         }
     }
 
+    // The Z-order experiment mirrors the paper's min/max file-skipping workload.
     private static BenchmarkResult benchmarkZOrder(Config c) throws Exception {
         if (c.files <= 0 || c.rowsPerFile <= 0) {
             throw new IllegalArgumentException("files and rowsPerFile must be > 0");
@@ -280,6 +284,7 @@ public final class BenchmarkMain {
 
     private record SnapshotStats(List<com.delta.deltalake.log.AddFile> files) {}
 
+    // Measure a selective query after pruning files with their persisted statistics.
     private static BenchmarkResult benchmarkDataSkipping(Config c) throws Exception {
         try (StorageHandle handle = openStorage(c)) {
             Storage storage = handle.storage();

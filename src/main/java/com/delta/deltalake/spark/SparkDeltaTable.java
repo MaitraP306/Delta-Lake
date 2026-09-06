@@ -19,6 +19,7 @@ import java.time.ZoneOffset;
 import java.time.LocalDate;
 import java.util.*;
 
+/** Spark-facing adapter that maps Delta table operations onto Spark-compatible paths and schemas. */
 public final class SparkDeltaTable {
     private SparkDeltaTable() {}
 

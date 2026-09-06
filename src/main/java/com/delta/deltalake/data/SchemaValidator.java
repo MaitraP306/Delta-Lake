@@ -11,6 +11,7 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.util.Map;
 
+/** Applies compatibility rules when table schemas are created or evolved. */
 public final class SchemaValidator {
     private SchemaValidator() {}
 

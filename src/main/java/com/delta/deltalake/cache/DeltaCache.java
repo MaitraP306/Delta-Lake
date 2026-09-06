@@ -4,6 +4,7 @@ package com.delta.deltalake.cache;
 import java.util.LinkedHashMap;
 import java.util.Objects;
 
+/** In-memory cache for reusable Delta table state and metadata. */
 public final class DeltaCache<K, V> {
     private final int capacity;
     private final LinkedHashMap<K, V> entries;

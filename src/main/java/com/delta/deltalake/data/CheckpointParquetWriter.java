@@ -11,6 +11,7 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.util.Collection;
 
+/** Writes checkpoint actions to Parquet for efficient snapshot reconstruction. */
 public final class CheckpointParquetWriter {
   private CheckpointParquetWriter() {}
   public static void write(java.nio.file.Path output,Schema schema,Collection<? extends GenericRecord> rows) throws IOException {

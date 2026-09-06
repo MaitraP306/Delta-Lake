@@ -42,13 +42,7 @@ class DeltaTableStreamingVerificationTest {
     }
 
     private Row row(TableSchema schema, long id, double value) {
-        return Row.of(
-                schema,
-                Map.of(
-                        "id", id,
-                        "value", value
-                )
-        );
+        return Row.of(schema, Map.of("id", id, "value", value));
     }
 
     private AddFile addFile(VersionedLogRecord record) {
@@ -62,17 +56,11 @@ class DeltaTableStreamingVerificationTest {
         DeltaTable table = newTable();
         TableSchema schema = schema();
 
-        table.appendRows(List.of(
-                row(schema, 1, 10.0)
-        ));
+        table.appendRows(List.of(row(schema, 1, 10.0)));
 
-        table.appendRows(List.of(
-                row(schema, 2, 20.0)
-        ));
+        table.appendRows(List.of(row(schema, 2, 20.0)));
 
-        table.appendRows(List.of(
-                row(schema, 3, 30.0)
-        ));
+        table.appendRows(List.of(row(schema, 3, 30.0)));
 
         assertEquals(2, table.version());
 
@@ -80,21 +68,13 @@ class DeltaTableStreamingVerificationTest {
 
         assertFalse(tail.isEmpty());
 
-        assertTrue(
-                tail.stream().allMatch(record -> record.version() >= 1)
-        );
+        assertTrue(tail.stream().allMatch(record -> record.version() >= 1));
 
-        assertTrue(
-                tail.stream().allMatch(record -> record.version() <= 2)
-        );
+        assertTrue(tail.stream().allMatch(record -> record.version() <= 2));
 
-        assertTrue(
-                tail.stream().anyMatch(record -> record.version() == 1)
-        );
+        assertTrue(tail.stream().anyMatch(record -> record.version() == 1));
 
-        assertTrue(
-                tail.stream().anyMatch(record -> record.version() == 2)
-        );
+        assertTrue(tail.stream().anyMatch(record -> record.version() == 2));
     }
 
     @Test
@@ -102,28 +82,16 @@ class DeltaTableStreamingVerificationTest {
         DeltaTable table = newTable();
         TableSchema schema = schema();
 
-        table.appendRows(List.of(
-                row(schema, 1, 10.0)
-        ));
+        table.appendRows(List.of(row(schema, 1, 10.0)));
 
-        table.appendRows(List.of(
-                row(schema, 2, 20.0)
-        ));
+        table.appendRows(List.of(row(schema, 2, 20.0)));
 
-        table.appendRows(List.of(
-                row(schema, 3, 30.0)
-        ));
+        table.appendRows(List.of(row(schema, 3, 30.0)));
 
         List<VersionedLogRecord> changes = table.incrementalFiles(-1);
 
         assertEquals(3, changes.size());
-
-        assertEquals(
-                List.of(0L, 1L, 2L),
-                changes.stream()
-                        .map(VersionedLogRecord::version)
-                        .toList()
-        );
+        assertEquals(List.of(0L, 1L, 2L), changes.stream().map(VersionedLogRecord::version).toList());
 
         for (VersionedLogRecord change : changes) {
             AddFile add = addFile(change);
@@ -139,40 +107,21 @@ class DeltaTableStreamingVerificationTest {
         DeltaTable table = newTable();
         TableSchema schema = schema();
 
-        table.appendRows(List.of(
-                row(schema, 1, 10.0)
-        ));
+        table.appendRows(List.of(row(schema, 1, 10.0)));
 
-        table.appendRows(List.of(
-                row(schema, 2, 20.0)
-        ));
+        table.appendRows(List.of(row(schema, 2, 20.0)));
 
-        table.appendRows(List.of(
-                row(schema, 3, 30.0)
-        ));
+        table.appendRows(List.of(row(schema, 3, 30.0)));
 
-        List<VersionedLogRecord> afterVersionZero =
-                table.incrementalFiles(0);
+        List<VersionedLogRecord> afterVersionZero = table.incrementalFiles(0);
 
-        assertEquals(
-                List.of(1L, 2L),
-                afterVersionZero.stream()
-                        .map(VersionedLogRecord::version)
-                        .toList()
-        );
+        assertEquals(List.of(1L, 2L), afterVersionZero.stream().map(VersionedLogRecord::version).toList());
 
-        List<VersionedLogRecord> afterVersionOne =
-                table.incrementalFiles(1);
+        List<VersionedLogRecord> afterVersionOne = table.incrementalFiles(1);
 
-        assertEquals(
-                List.of(2L),
-                afterVersionOne.stream()
-                        .map(VersionedLogRecord::version)
-                        .toList()
-        );
+        assertEquals(List.of(2L), afterVersionOne.stream().map(VersionedLogRecord::version).toList());
 
-        List<VersionedLogRecord> afterVersionTwo =
-                table.incrementalFiles(2);
+        List<VersionedLogRecord> afterVersionTwo = table.incrementalFiles(2);
 
         assertTrue(afterVersionTwo.isEmpty());
     }
@@ -182,14 +131,11 @@ class DeltaTableStreamingVerificationTest {
         DeltaTable table = newTable();
         TableSchema schema = schema();
 
-        table.appendRows(List.of(
-                row(schema, 1, 10.0)
-        ));
+        table.appendRows(List.of(row(schema, 1, 10.0)));
 
         assertEquals(0, table.version());
 
-        List<VersionedLogRecord> changes =
-                table.incrementalFiles(0);
+        List<VersionedLogRecord> changes = table.incrementalFiles(0);
 
         assertTrue(changes.isEmpty());
     }
@@ -199,27 +145,18 @@ class DeltaTableStreamingVerificationTest {
         DeltaTable table = newTable();
         TableSchema schema = schema();
 
-        table.appendRows(List.of(
-                row(schema, 1, 10.0)
-        ));
+        table.appendRows(List.of(row(schema, 1, 10.0)));
 
-        assertThrows(
-                IllegalArgumentException.class,
-                () -> table.incrementalFiles(-2)
-        );
+        assertThrows(IllegalArgumentException.class, () -> table.incrementalFiles(-2));
 
-        assertThrows(
-                IllegalArgumentException.class,
-                () -> table.incrementalFiles(1)
-        );
+        assertThrows(IllegalArgumentException.class, () -> table.incrementalFiles(1));
     }
 
     @Test
     void streamingConsumerStartsAtMinusOne() throws Exception {
         DeltaTable table = newTable();
 
-        DeltaTable.StreamingConsumer consumer =
-                table.streamingConsumer();
+        DeltaTable.StreamingConsumer consumer = table.streamingConsumer();
 
         assertEquals(-1, consumer.lastProcessedVersion());
     }
@@ -229,27 +166,17 @@ class DeltaTableStreamingVerificationTest {
         DeltaTable table = newTable();
         TableSchema schema = schema();
 
-        table.appendRows(List.of(
-                row(schema, 1, 10.0)
-        ));
+        table.appendRows(List.of(row(schema, 1, 10.0)));
 
-        table.appendRows(List.of(
-                row(schema, 2, 20.0)
-        ));
+        table.appendRows(List.of(row(schema, 2, 20.0)));
 
-        DeltaTable.StreamingConsumer consumer =
-                table.streamingConsumer();
+        DeltaTable.StreamingConsumer consumer = table.streamingConsumer();
 
         List<VersionedLogRecord> firstPoll = consumer.poll();
 
         assertEquals(2, firstPoll.size());
 
-        assertEquals(
-                List.of(0L, 1L),
-                firstPoll.stream()
-                        .map(VersionedLogRecord::version)
-                        .toList()
-        );
+        assertEquals(List.of(0L, 1L), firstPoll.stream().map(VersionedLogRecord::version).toList());
 
         assertEquals(1, consumer.lastProcessedVersion());
     }
@@ -259,12 +186,9 @@ class DeltaTableStreamingVerificationTest {
         DeltaTable table = newTable();
         TableSchema schema = schema();
 
-        table.appendRows(List.of(
-                row(schema, 1, 10.0)
-        ));
+        table.appendRows(List.of(row(schema, 1, 10.0)));
 
-        DeltaTable.StreamingConsumer consumer =
-                table.streamingConsumer();
+        DeltaTable.StreamingConsumer consumer = table.streamingConsumer();
 
         List<VersionedLogRecord> firstPoll = consumer.poll();
 
@@ -282,12 +206,9 @@ class DeltaTableStreamingVerificationTest {
         DeltaTable table = newTable();
         TableSchema schema = schema();
 
-        table.appendRows(List.of(
-                row(schema, 1, 10.0)
-        ));
+        table.appendRows(List.of(row(schema, 1, 10.0)));
 
-        DeltaTable.StreamingConsumer consumer =
-                table.streamingConsumer();
+        DeltaTable.StreamingConsumer consumer = table.streamingConsumer();
 
         List<VersionedLogRecord> firstPoll = consumer.poll();
 
@@ -295,24 +216,15 @@ class DeltaTableStreamingVerificationTest {
         assertEquals(0, firstPoll.get(0).version());
         assertEquals(0, consumer.lastProcessedVersion());
 
-        table.appendRows(List.of(
-                row(schema, 2, 20.0)
-        ));
+        table.appendRows(List.of(row(schema, 2, 20.0)));
 
-        table.appendRows(List.of(
-                row(schema, 3, 30.0)
-        ));
+        table.appendRows(List.of(row(schema, 3, 30.0)));
 
         List<VersionedLogRecord> secondPoll = consumer.poll();
 
         assertEquals(2, secondPoll.size());
 
-        assertEquals(
-                List.of(1L, 2L),
-                secondPoll.stream()
-                        .map(VersionedLogRecord::version)
-                        .toList()
-        );
+        assertEquals(List.of(1L, 2L), secondPoll.stream().map(VersionedLogRecord::version).toList());
 
         assertEquals(2, consumer.lastProcessedVersion());
     }
@@ -322,12 +234,9 @@ class DeltaTableStreamingVerificationTest {
         DeltaTable table = newTable();
         TableSchema schema = schema();
 
-        table.appendRows(List.of(
-                row(schema, 1, 10.0)
-        ));
+        table.appendRows(List.of(row(schema, 1, 10.0)));
 
-        DeltaTable.StreamingConsumer consumer =
-                table.streamingConsumer();
+        DeltaTable.StreamingConsumer consumer = table.streamingConsumer();
 
         List<VersionedLogRecord> firstPoll = consumer.poll();
 
@@ -338,10 +247,7 @@ class DeltaTableStreamingVerificationTest {
 
         assertTrue(secondPoll.isEmpty());
 
-        assertEquals(
-                table.version(),
-                consumer.lastProcessedVersion()
-        );
+        assertEquals(table.version(), consumer.lastProcessedVersion());
     }
 
     @Test
@@ -349,26 +255,20 @@ class DeltaTableStreamingVerificationTest {
         DeltaTable table = newTable();
         TableSchema schema = schema();
 
-        table.appendRows(List.of(
-                row(schema, 1, 10.0)
-        ));
+        table.appendRows(List.of(row(schema, 1, 10.0)));
 
-        DeltaTable.StreamingConsumer consumer =
-                table.streamingConsumer();
+        DeltaTable.StreamingConsumer consumer = table.streamingConsumer();
 
-        // Consume version 0.
         List<VersionedLogRecord> initial = consumer.poll();
 
         assertEquals(1, initial.size());
         assertEquals(0, initial.get(0).version());
         assertEquals(0, consumer.lastProcessedVersion());
 
-        // Version 1 is a genuine data change.
         table.appendRows(List.of(
                 row(schema, 2, 20.0)
         ));
 
-        // The consumer must see the append.
         List<VersionedLogRecord> appendChanges = consumer.poll();
 
         assertEquals(1, appendChanges.size());
@@ -378,25 +278,14 @@ class DeltaTableStreamingVerificationTest {
 
         assertTrue(appendedFile.dataChange());
         assertEquals(1, consumer.lastProcessedVersion());
-
-        // Version 2 is an OPTIMIZE rewrite.
         long optimizeVersion = table.optimize();
 
         assertEquals(2, optimizeVersion);
 
-        // OPTIMIZE creates RemoveFile/AddFile actions with
-        // dataChange=false. Therefore the streaming consumer
-        // should not emit anything for the optimize commit.
         List<VersionedLogRecord> optimizeChanges = consumer.poll();
 
         assertTrue(optimizeChanges.isEmpty());
-
-        // Even though no data-change files were emitted, the
-        // consumer must advance past the optimize version.
-        assertEquals(
-                optimizeVersion,
-                consumer.lastProcessedVersion()
-        );
+        assertEquals(optimizeVersion, consumer.lastProcessedVersion());
     }
 
     @Test
@@ -404,36 +293,22 @@ class DeltaTableStreamingVerificationTest {
         DeltaTable table = newTable();
         TableSchema schema = schema();
 
-        table.appendRows(List.of(
-                row(schema, 1, 10.0)
-        ));
+        table.appendRows(List.of(row(schema, 1, 10.0)));
 
-        table.appendRows(List.of(
-                row(schema, 2, 20.0)
-        ));
+        table.appendRows(List.of(row(schema, 2, 20.0)));
 
-        DeltaTable.StreamingConsumer consumer =
-                table.streamingConsumer();
+        DeltaTable.StreamingConsumer consumer = table.streamingConsumer();
 
         List<VersionedLogRecord> initial = consumer.poll();
 
         assertEquals(2, initial.size());
         assertEquals(1, consumer.lastProcessedVersion());
 
-        table.deleteRows(r ->
-                ((Number) r.get("id")).longValue() == 1L
-        );
+        table.deleteRows(r -> ((Number) r.get("id")).longValue() == 1L);
 
-        List<VersionedLogRecord> afterDelete =
-                consumer.poll();
+        List<VersionedLogRecord> afterDelete = consumer.poll();
 
-        // A delete generates a RemoveFile and possibly a rewritten
-        // AddFile. The RemoveFile itself must never be returned.
-        assertTrue(
-                afterDelete.stream().noneMatch(record ->
-                        record.record().action() instanceof RemoveFile
-                )
-        );
+        assertTrue(afterDelete.stream().noneMatch(record -> record.record().action() instanceof RemoveFile));
 
         for (VersionedLogRecord record : afterDelete) {
             assertTrue(record.record().action() instanceof AddFile);
@@ -446,31 +321,19 @@ class DeltaTableStreamingVerificationTest {
         DeltaTable table = newTable();
         TableSchema schema = schema();
 
-        table.appendRows(List.of(
-                row(schema, 1, 10.0)
-        ));
+        table.appendRows(List.of(row(schema, 1, 10.0)));
 
-        table.appendRows(List.of(
-                row(schema, 2, 20.0)
-        ));
+        table.appendRows(List.of(row(schema, 2, 20.0)));
 
-        DeltaTable.StreamingConsumer consumer =
-                table.streamingConsumer();
+        DeltaTable.StreamingConsumer consumer = table.streamingConsumer();
 
-        List<VersionedLogRecord> expected =
-                table.incrementalFiles(-1);
+        List<VersionedLogRecord> expected = table.incrementalFiles(-1);
 
-        List<VersionedLogRecord> actual =
-                consumer.poll();
+        List<VersionedLogRecord> actual = consumer.poll();
 
         assertEquals(expected, actual);
 
-        assertEquals(
-                actual.isEmpty()
-                        ? table.version()
-                        : actual.get(actual.size() - 1).version(),
-                consumer.lastProcessedVersion()
-        );
+        assertEquals(actual.isEmpty() ? table.version() : actual.get(actual.size() - 1).version(), consumer.lastProcessedVersion());
     }
 
     @Test
@@ -478,48 +341,23 @@ class DeltaTableStreamingVerificationTest {
         DeltaTable table = newTable();
         TableSchema schema = schema();
 
-        table.appendRows(List.of(
-                row(schema, 1, 10.0)
-        ));
+        table.appendRows(List.of(row(schema, 1, 10.0)));
 
-        table.appendRows(List.of(
-                row(schema, 2, 20.0)
-        ));
+        table.appendRows(List.of(row(schema, 2, 20.0)));
 
-        table.appendRows(List.of(
-                row(schema, 3, 30.0)
-        ));
+        table.appendRows(List.of(row(schema, 3, 30.0)));
 
         List<VersionedLogRecord> tail = table.tail(-1);
-        List<VersionedLogRecord> incremental =
-                table.incrementalFiles(-1);
+        List<VersionedLogRecord> incremental = table.incrementalFiles(-1);
 
         assertFalse(tail.isEmpty());
         assertFalse(incremental.isEmpty());
 
-        assertTrue(
-                isNonDecreasing(
-                        tail.stream()
-                                .map(VersionedLogRecord::version)
-                                .toList()
-                )
-        );
+        assertTrue(isNonDecreasing(tail.stream().map(VersionedLogRecord::version).toList()));
 
-        assertTrue(
-                isNonDecreasing(
-                        incremental.stream()
-                                .map(VersionedLogRecord::version)
-                                .toList()
-                )
-        );
+        assertTrue(isNonDecreasing(incremental.stream().map(VersionedLogRecord::version).toList()));
 
-        assertEquals(
-                List.of(0L, 1L, 2L),
-                incremental.stream()
-                        .map(VersionedLogRecord::version)
-                        .distinct()
-                        .toList()
-        );
+        assertEquals(List.of(0L, 1L, 2L), incremental.stream().map(VersionedLogRecord::version).distinct().toList());
     }
 
     private boolean isNonDecreasing(List<Long> values) {

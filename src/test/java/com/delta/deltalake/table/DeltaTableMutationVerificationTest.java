@@ -42,47 +42,22 @@ class DeltaTableMutationVerificationTest {
                 }
                 """;
 
-        return new TableSchema(
-                new Schema.Parser().parse(schemaJson)
-        );
+        return new TableSchema(new Schema.Parser().parse(schemaJson));
     }
 
-    private Row row(
-            TableSchema schema,
-            long id,
-            String name,
-            int age) {
+    private Row row(TableSchema schema, long id, String name, int age) {
 
-        return Row.of(
-                schema,
-                Map.of(
-                        "id", id,
-                        "name", name,
-                        "age", age
-                )
-        );
+        return Row.of(schema, Map.of("id", id, "name", name, "age", age));
     }
 
-    private DeltaTable createTable(
-            LocalStorage storage,
-            TableSchema schema) throws Exception {
+    private DeltaTable createTable(LocalStorage storage, TableSchema schema) throws Exception {
 
         DeltaTable table = DeltaTable.open(storage);
 
-        table.appendRows(
-                List.of(
-                        row(schema, 1L, "Alice", 20),
-                        row(schema, 2L, "Bob", 25),
-                        row(schema, 3L, "Charlie", 30)
-                )
-        );
+        table.appendRows(List.of(row(schema, 1L, "Alice", 20), row(schema, 2L, "Bob", 25), row(schema, 3L, "Charlie", 30)));
 
         return table;
     }
-
-    // -------------------------------------------------------------------------
-    // DELETE
-    // -------------------------------------------------------------------------
 
     @Test
     void deleteRemovesMatchingRows() throws Exception {
@@ -95,9 +70,7 @@ class DeltaTableMutationVerificationTest {
         assertEquals(3, table.readRows().size());
         assertEquals(0, table.version());
 
-        table.deleteRows(
-                row -> ((Number) row.get("id")).longValue() == 2L
-        );
+        table.deleteRows(row -> ((Number) row.get("id")).longValue() == 2L);
 
         assertEquals(1, table.version());
 
@@ -117,13 +90,8 @@ class DeltaTableMutationVerificationTest {
 
         DeltaTable table = createTable(storage, schema);
 
-        table.deleteRows(
-                row -> ((Number) row.get("id")).longValue() == 999L
-        );
+        table.deleteRows(row -> ((Number) row.get("id")).longValue() == 999L);
 
-        /*
-         * No row matched, so there should be no new version.
-         */
         assertEquals(0, table.version());
 
         List<Row> rows = table.readRows();
@@ -143,32 +111,17 @@ class DeltaTableMutationVerificationTest {
 
         assertEquals(1, before.fileCount());
 
-        AddFile originalFile =
-                before.activeFiles()
-                        .iterator()
-                        .next();
+        AddFile originalFile = before.activeFiles().iterator().next();
 
         String originalPath = originalFile.path();
 
-        table.deleteRows(
-                row -> ((Number) row.get("id")).longValue() == 2L
-        );
+        table.deleteRows(row -> ((Number) row.get("id")).longValue() == 2L);
 
         Snapshot after = table.snapshot();
 
         assertEquals(1, after.fileCount());
 
-        /*
-         * The original physical file should no longer
-         * be an active file in the new snapshot.
-         */
-        assertFalse(
-                after.activeFiles()
-                        .stream()
-                        .anyMatch(
-                                file -> file.path().equals(originalPath)
-                        )
-        );
+        assertFalse(after.activeFiles().stream().anyMatch(file -> file.path().equals(originalPath)));
     }
 
     @Test
@@ -181,32 +134,16 @@ class DeltaTableMutationVerificationTest {
 
         Snapshot before = table.snapshot();
 
-        AddFile originalFile =
-                before.activeFiles()
-                        .iterator()
-                        .next();
+        AddFile originalFile = before.activeFiles().iterator().next();
 
         String originalPath = originalFile.path();
 
-        table.deleteRows(
-                row -> ((Number) row.get("id")).longValue() == 2L
-        );
+        table.deleteRows(row -> ((Number) row.get("id")).longValue() == 2L);
 
         Snapshot after = table.snapshot();
 
-        assertTrue(
-                after.tombstones()
-                        .stream()
-                        .anyMatch(
-                                remove ->
-                                        remove.path().equals(originalPath)
-                        )
-        );
+        assertTrue(after.tombstones().stream().anyMatch(remove -> remove.path().equals(originalPath)));
     }
-
-    // -------------------------------------------------------------------------
-    // UPSERT
-    // -------------------------------------------------------------------------
 
     @Test
     void upsertInsertsNewRows() throws Exception {
@@ -216,23 +153,13 @@ class DeltaTableMutationVerificationTest {
 
         DeltaTable table = createTable(storage, schema);
 
-        table.upsertRows(
-                List.of(
-                        row(schema, 4L, "David", 35)
-                ),
-                "id"
-        );
+        table.upsertRows(List.of(row(schema, 4L, "David", 35)), "id");
 
         List<Row> rows = table.readRows();
 
         assertEquals(4, rows.size());
 
-        assertTrue(
-                rows.stream()
-                        .anyMatch(
-                                r -> ((Number) r.get("id")).longValue() == 4L
-                        )
-        );
+        assertTrue(rows.stream().anyMatch(r -> ((Number) r.get("id")).longValue() == 4L));
     }
 
     @Test
@@ -243,33 +170,17 @@ class DeltaTableMutationVerificationTest {
 
         DeltaTable table = createTable(storage, schema);
 
-        table.upsertRows(
-                List.of(
-                        row(schema, 2L, "Bob Updated", 99)
-                ),
-                "id"
-        );
+        table.upsertRows(List.of(row(schema, 2L, "Bob Updated", 99)), "id");
 
         List<Row> rows = table.readRows();
 
         assertEquals(3, rows.size());
 
-        Row updated = rows.stream()
-                .filter(
-                        r -> ((Number) r.get("id")).longValue() == 2L
-                )
-                .findFirst()
-                .orElseThrow();
+        Row updated = rows.stream().filter(r -> ((Number) r.get("id")).longValue() == 2L).findFirst().orElseThrow();
 
-        assertEquals(
-                "Bob Updated",
-                updated.get("name")
-        );
+        assertEquals("Bob Updated", updated.get("name"));
 
-        assertEquals(
-                99,
-                updated.get("age")
-        );
+        assertEquals(99, updated.get("age"));
     }
 
     @Test
@@ -280,28 +191,17 @@ class DeltaTableMutationVerificationTest {
 
         DeltaTable table = createTable(storage, schema);
 
-        table.upsertRows(
-                List.of(
-                        row(schema, 2L, "Bob Updated", 99)
-                ),
-                "id"
-        );
+        table.upsertRows(List.of(row(schema, 2L, "Bob Updated", 99)), "id");
 
         List<Row> rows = table.readRows();
 
-        long count =
-                rows.stream()
-                        .filter(
-                                r -> ((Number) r.get("id")).longValue() == 2L
-                        )
-                        .count();
+        long count = rows.stream().filter(r -> ((Number) r.get("id")).longValue() == 2L).count();
 
         assertEquals(1, count);
     }
 
     @Test
-    void upsertCanUpdateAndInsertInOneOperation()
-            throws Exception {
+    void upsertCanUpdateAndInsertInOneOperation() throws Exception {
 
         LocalStorage storage = new LocalStorage(tempDir);
 
@@ -309,48 +209,20 @@ class DeltaTableMutationVerificationTest {
 
         DeltaTable table = createTable(storage, schema);
 
-        table.upsertRows(
-                List.of(
-                        row(schema, 2L, "Bob Updated", 99),
-                        row(schema, 4L, "David", 35)
-                ),
-                "id"
-        );
+        table.upsertRows(List.of(row(schema, 2L, "Bob Updated", 99), row(schema, 4L, "David", 35)), "id");
 
         List<Row> rows = table.readRows();
 
         assertEquals(4, rows.size());
 
-        Row updated =
-                rows.stream()
-                        .filter(
-                                r -> ((Number) r.get("id")).longValue() == 2L
-                        )
-                        .findFirst()
-                        .orElseThrow();
+        Row updated = rows.stream().filter(r -> ((Number) r.get("id")).longValue() == 2L).findFirst().orElseThrow();
 
-        assertEquals(
-                "Bob Updated",
-                updated.get("name")
-        );
+        assertEquals("Bob Updated", updated.get("name"));
 
-        Row inserted =
-                rows.stream()
-                        .filter(
-                                r -> ((Number) r.get("id")).longValue() == 4L
-                        )
-                        .findFirst()
-                        .orElseThrow();
+        Row inserted = rows.stream().filter(r -> ((Number) r.get("id")).longValue() == 4L).findFirst().orElseThrow();
 
-        assertEquals(
-                "David",
-                inserted.get("name")
-        );
+        assertEquals("David", inserted.get("name"));
     }
-
-    // -------------------------------------------------------------------------
-    // MERGE
-    // -------------------------------------------------------------------------
 
     @Test
     void mergeUpdatesMatchingRows() throws Exception {
@@ -360,34 +232,17 @@ class DeltaTableMutationVerificationTest {
 
         DeltaTable table = createTable(storage, schema);
 
-        table.mergeRows(
-                List.of(
-                        row(schema, 2L, "Bob Merged", 100)
-                ),
-                "id"
-        );
+        table.mergeRows(List.of(row(schema, 2L, "Bob Merged", 100)), "id");
 
         List<Row> rows = table.readRows();
 
         assertEquals(3, rows.size());
 
-        Row updated =
-                rows.stream()
-                        .filter(
-                                r -> ((Number) r.get("id")).longValue() == 2L
-                        )
-                        .findFirst()
-                        .orElseThrow();
+        Row updated = rows.stream().filter(r -> ((Number) r.get("id")).longValue() == 2L).findFirst().orElseThrow();
 
-        assertEquals(
-                "Bob Merged",
-                updated.get("name")
-        );
+        assertEquals("Bob Merged", updated.get("name"));
 
-        assertEquals(
-                100,
-                updated.get("age")
-        );
+        assertEquals(100, updated.get("age"));
     }
 
     @Test
@@ -398,28 +253,17 @@ class DeltaTableMutationVerificationTest {
 
         DeltaTable table = createTable(storage, schema);
 
-        table.mergeRows(
-                List.of(
-                        row(schema, 4L, "David", 35)
-                ),
-                "id"
-        );
+        table.mergeRows(List.of(row(schema, 4L, "David", 35)), "id");
 
         List<Row> rows = table.readRows();
 
         assertEquals(4, rows.size());
 
-        assertTrue(
-                rows.stream()
-                        .anyMatch(
-                                r -> ((Number) r.get("id")).longValue() == 4L
-                        )
-        );
+        assertTrue(rows.stream().anyMatch(r -> ((Number) r.get("id")).longValue() == 4L));
     }
 
     @Test
-    void mergeUpdatesAndInsertsInOneOperation()
-            throws Exception {
+    void mergeUpdatesAndInsertsInOneOperation() throws Exception {
 
         LocalStorage storage = new LocalStorage(tempDir);
 
@@ -427,48 +271,20 @@ class DeltaTableMutationVerificationTest {
 
         DeltaTable table = createTable(storage, schema);
 
-        table.mergeRows(
-                List.of(
-                        row(schema, 2L, "Bob Merged", 100),
-                        row(schema, 4L, "David", 35)
-                ),
-                "id"
-        );
+        table.mergeRows(List.of(row(schema, 2L, "Bob Merged", 100), row(schema, 4L, "David", 35)), "id");
 
         List<Row> rows = table.readRows();
 
         assertEquals(4, rows.size());
 
-        Row updated =
-                rows.stream()
-                        .filter(
-                                r -> ((Number) r.get("id")).longValue() == 2L
-                        )
-                        .findFirst()
-                        .orElseThrow();
+        Row updated = rows.stream().filter(r -> ((Number) r.get("id")).longValue() == 2L).findFirst().orElseThrow();
 
-        assertEquals(
-                "Bob Merged",
-                updated.get("name")
-        );
+        assertEquals("Bob Merged", updated.get("name"));
 
-        Row inserted =
-                rows.stream()
-                        .filter(
-                                r -> ((Number) r.get("id")).longValue() == 4L
-                        )
-                        .findFirst()
-                        .orElseThrow();
+        Row inserted = rows.stream().filter(r -> ((Number) r.get("id")).longValue() == 4L).findFirst().orElseThrow();
 
-        assertEquals(
-                "David",
-                inserted.get("name")
-        );
+        assertEquals("David", inserted.get("name"));
     }
-
-    // -------------------------------------------------------------------------
-    // VERSION / SNAPSHOT BEHAVIOR
-    // -------------------------------------------------------------------------
 
     @Test
     void mutationCreatesNewDeltaVersion() throws Exception {
@@ -480,18 +296,11 @@ class DeltaTableMutationVerificationTest {
 
         assertEquals(0, table.version());
 
-        table.deleteRows(
-                row -> ((Number) row.get("id")).longValue() == 1L
-        );
+        table.deleteRows(row -> ((Number) row.get("id")).longValue() == 1L);
 
         assertEquals(1, table.version());
 
-        table.upsertRows(
-                List.of(
-                        row(schema, 4L, "David", 35)
-                ),
-                "id"
-        );
+        table.upsertRows(List.of(row(schema, 4L, "David", 35)), "id");
 
         assertEquals(2, table.version());
 
@@ -499,8 +308,7 @@ class DeltaTableMutationVerificationTest {
     }
 
     @Test
-    void historicalSnapshotRemainsReadableAfterMutation()
-            throws Exception {
+    void historicalSnapshotRemainsReadableAfterMutation() throws Exception {
 
         LocalStorage storage = new LocalStorage(tempDir);
 
@@ -508,41 +316,24 @@ class DeltaTableMutationVerificationTest {
 
         DeltaTable table = createTable(storage, schema);
 
-        Snapshot version0 =
-                table.snapshot(0);
+        Snapshot version0 = table.snapshot(0);
 
         assertEquals(3, table.readRows(0).size());
 
-        table.deleteRows(
-                row -> ((Number) row.get("id")).longValue() == 2L
-        );
+        table.deleteRows(row -> ((Number) row.get("id")).longValue() == 2L);
 
         assertEquals(1, table.version());
-
-        /*
-         * Current snapshot has two rows.
-         */
         assertEquals(2, table.readRows().size());
 
-        /*
-         * Historical version still has all three rows.
-         */
-        List<Row> historical =
-                table.readRows(version0.version());
+        List<Row> historical = table.readRows(version0.version());
 
         assertEquals(3, historical.size());
 
-        assertTrue(
-                historical.stream()
-                        .anyMatch(
-                                r -> ((Number) r.get("id")).longValue() == 2L
-                        )
-        );
+        assertTrue(historical.stream().anyMatch(r -> ((Number) r.get("id")).longValue() == 2L));
     }
 
     @Test
-    void mutationProducesRemoveAndAddActions()
-            throws Exception {
+    void mutationProducesRemoveAndAddActions() throws Exception {
 
         LocalStorage storage = new LocalStorage(tempDir);
 
@@ -550,39 +341,19 @@ class DeltaTableMutationVerificationTest {
 
         DeltaTable table = createTable(storage, schema);
 
-        Snapshot before =
-                table.snapshot();
+        Snapshot before = table.snapshot();
 
         assertEquals(1, before.fileCount());
 
-        String originalPath =
-                before.activeFiles()
-                        .iterator()
-                        .next()
-                        .path();
+        String originalPath = before.activeFiles().iterator().next().path();
 
-        table.deleteRows(
-                row -> ((Number) row.get("id")).longValue() == 2L
-        );
-
-        /*
-         * The new snapshot should have a replacement file.
-         */
-        Snapshot after =
-                table.snapshot();
+        table.deleteRows(row -> ((Number) row.get("id")).longValue() == 2L);
+        Snapshot after = table.snapshot();
 
         assertEquals(1, after.fileCount());
+        String replacementPath = after.activeFiles().iterator().next().path();
 
-        String replacementPath =
-                after.activeFiles()
-                        .iterator()
-                        .next()
-                        .path();
-
-        assertNotEquals(
-                originalPath,
-                replacementPath
-        );
+        assertNotEquals(originalPath, replacementPath);
 
         /*
          * The old file must be a tombstone.
@@ -597,20 +368,8 @@ class DeltaTableMutationVerificationTest {
                         )
         );
 
-        /*
-         * Both physical files can still exist because
-         * Delta does not immediately delete old files.
-         */
-        assertTrue(
-                Files.exists(
-                        tempDir.resolve(originalPath)
-                )
-        );
+        assertTrue(Files.exists(tempDir.resolve(originalPath)));
 
-        assertTrue(
-                Files.exists(
-                        tempDir.resolve(replacementPath)
-                )
-        );
+        assertTrue(Files.exists(tempDir.resolve(replacementPath)));
     }
 }

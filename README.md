@@ -465,6 +465,67 @@ mvn -q exec:java \
     --rows-per-file 1000"
 ```
 
+### Query Experiments
+
+The query experiment measures selective reads using Delta's file-level statistics. The benchmark runs the same query through two paths:
+
+1. **Delta query path** — uses the transaction-log snapshot and file statistics to prune files before reading Parquet data.
+2. **Full-scan baseline** — reads the Parquet files directly and applies the predicate after reading each file.
+
+The default query is a small range on the generated `id` column (`0` through `9`). This makes the experiment useful for validating that metadata-based pruning is actually taking place.
+
+For a local experiment, generate a table and run the query benchmark in one command:
+
+```bash
+mvn -q exec:java \
+  -Dexec.mainClass=com.delta.deltalake.experiments.BenchmarkMain \
+  -Dexec.args="data-skipping \
+    --backend local \
+    --root benchmark-data \
+    --files 100 \
+    --rows-per-file 1000 \
+    --generate \
+    --warmups 3 \
+    --iterations 10"
+```
+
+For an S3-backed experiment:
+
+```bash
+export AWS_PROFILE=delta-experiment
+export S3_BUCKET=<your-bucket>
+
+mvn -q exec:java \
+  -Dexec.mainClass=com.delta.deltalake.experiments.BenchmarkMain \
+  -Dexec.args="data-skipping \
+    --backend s3 \
+    --bucket $S3_BUCKET \
+    --prefix experiments/query-100x1000 \
+    --region us-east-2 \
+    --files 100 \
+    --rows-per-file 1000 \
+    --generate \
+    --warmups 3 \
+    --iterations 10"
+```
+
+To save the JSON result:
+
+```bash
+mvn -q exec:java \
+  -Dexec.mainClass=com.delta.deltalake.experiments.BenchmarkMain \
+  -Dexec.args="data-skipping \
+    --backend local \
+    --root benchmark-data \
+    --files 100 \
+    --rows-per-file 1000 \
+    --output experiments/results/query.json"
+```
+
+The output includes the total file count, candidate files, percentage of files skipped, rows returned, median full-scan time, median Delta query time, and the relative speedup.
+
+> **Note:** The query benchmark is intentionally implemented at the table/Parquet layer. It does not require Spark or a SQL engine; the predicate is expressed through the `DeltaTable` query API.
+
 ### Z-Ordering
 
 The Z-order benchmark exercises multidimensional data organization and statistics-based file skipping.

@@ -17,33 +17,15 @@ class SnapshotVerificationTest {
     Path tempDir;
 
     private CommitInfo commitInfo(String operation) {
-        return new CommitInfo(
-                System.currentTimeMillis(),
-                operation,
-                Map.of(),
-                null
-        );
+        return new CommitInfo(System.currentTimeMillis(), operation, Map.of(), null);
     }
 
     private LogRecord add(String path) {
-        return ActionCodec.encode(
-                new AddFile(
-                        path,
-                        100L,
-                        1700000000000L,
-                        true
-                )
-        );
+        return ActionCodec.encode(new AddFile(path, 100L, 1700000000000L, true));
     }
 
     private LogRecord remove(String path) {
-        return ActionCodec.encode(
-                new RemoveFile(
-                        path,
-                        1700000000000L,
-                        true
-                )
-        );
+        return ActionCodec.encode(new RemoveFile(path, 1700000000000L, true));
     }
 
     @Test
@@ -52,27 +34,7 @@ class SnapshotVerificationTest {
         LocalStorage storage = new LocalStorage(tempDir);
         TransactionLog log = new TransactionLog(storage);
 
-        log.append(
-                0,
-                List.of(
-                        ActionCodec.encode(
-                                new Protocol(1, 1)
-                        ),
-                        ActionCodec.encode(
-                                new Metadata(
-                                        "table-1",
-                                        "parquet",
-                                        "{\"schema\":\"test\"}",
-                                        List.of(),
-                                        Map.of()
-                                )
-                        ),
-                        add("data/file-a.parquet"),
-                        ActionCodec.encode(
-                                commitInfo("WRITE")
-                        )
-                )
-        );
+        log.append(0, List.of(ActionCodec.encode(new Protocol(1, 1)), ActionCodec.encode(new Metadata("table-1", "parquet", "{\"schema\":\"test\"}", List.of(), Map.of())), add("data/file-a.parquet"), ActionCodec.encode(commitInfo("WRITE"))));
 
         SnapshotManager manager = new SnapshotManager(log);
 
@@ -81,35 +43,19 @@ class SnapshotVerificationTest {
         assertEquals(0, snapshot.version());
         assertEquals(1, snapshot.fileCount());
 
-        assertTrue(
-                snapshot.contains("data/file-a.parquet")
-        );
+        assertTrue(snapshot.contains("data/file-a.parquet"));
 
-        AddFile file = snapshot.activeFiles()
-                .iterator()
-                .next();
+        AddFile file = snapshot.activeFiles().iterator().next();
 
-        assertEquals(
-                "data/file-a.parquet",
-                file.path()
-        );
+        assertEquals("data/file-a.parquet", file.path());
 
         assertEquals(100L, file.size());
 
-        assertEquals(
-                1,
-                snapshot.protocol().minReaderVersion()
-        );
+        assertEquals(1,snapshot.protocol().minReaderVersion());
 
-        assertEquals(
-                1,
-                snapshot.protocol().minWriterVersion()
-        );
+        assertEquals(1, snapshot.protocol().minWriterVersion());
 
-        assertEquals(
-                "table-1",
-                snapshot.metadata().id()
-        );
+        assertEquals("table-1", snapshot.metadata().id());
     }
 
     @Test
@@ -118,20 +64,11 @@ class SnapshotVerificationTest {
         LocalStorage storage = new LocalStorage(tempDir);
         TransactionLog log = new TransactionLog(storage);
 
-        log.append(
-                0,
-                List.of(add("data/file-a.parquet"))
-        );
+        log.append(0, List.of(add("data/file-a.parquet")));
 
-        log.append(
-                1,
-                List.of(add("data/file-b.parquet"))
-        );
+        log.append(1, List.of(add("data/file-b.parquet")));
 
-        log.append(
-                2,
-                List.of(add("data/file-c.parquet"))
-        );
+        log.append(2, List.of(add("data/file-c.parquet")));
 
         SnapshotManager manager = new SnapshotManager(log);
 
@@ -151,20 +88,9 @@ class SnapshotVerificationTest {
         LocalStorage storage = new LocalStorage(tempDir);
         TransactionLog log = new TransactionLog(storage);
 
-        log.append(
-                0,
-                List.of(
-                        add("data/file-a.parquet"),
-                        add("data/file-b.parquet")
-                )
-        );
+        log.append(0, List.of(add("data/file-a.parquet"), add("data/file-b.parquet")));
 
-        log.append(
-                1,
-                List.of(
-                        remove("data/file-a.parquet")
-                )
-        );
+        log.append(1, List.of(remove("data/file-a.parquet")));
 
         SnapshotManager manager = new SnapshotManager(log);
 
@@ -172,28 +98,15 @@ class SnapshotVerificationTest {
 
         assertEquals(1, snapshot.fileCount());
 
-        assertFalse(
-                snapshot.contains("data/file-a.parquet")
-        );
+        assertFalse(snapshot.contains("data/file-a.parquet"));
 
-        assertTrue(
-                snapshot.contains("data/file-b.parquet")
-        );
+        assertTrue(snapshot.contains("data/file-b.parquet"));
 
-        assertEquals(
-                1,
-                snapshot.tombstones().size()
-        );
+        assertEquals(1, snapshot.tombstones().size());
 
-        RemoveFile tombstone =
-                snapshot.tombstones()
-                        .iterator()
-                        .next();
+        RemoveFile tombstone = snapshot.tombstones().iterator().next();
 
-        assertEquals(
-                "data/file-a.parquet",
-                tombstone.path()
-        );
+        assertEquals("data/file-a.parquet", tombstone.path());
     }
 
     @Test
@@ -202,20 +115,11 @@ class SnapshotVerificationTest {
         LocalStorage storage = new LocalStorage(tempDir);
         TransactionLog log = new TransactionLog(storage);
 
-        log.append(
-                0,
-                List.of(add("data/file-a.parquet"))
-        );
+        log.append(0, List.of(add("data/file-a.parquet")));
 
-        log.append(
-                1,
-                List.of(remove("data/file-a.parquet"))
-        );
+        log.append(1, List.of(remove("data/file-a.parquet")));
 
-        log.append(
-                2,
-                List.of(add("data/file-a.parquet"))
-        );
+        log.append(2, List.of(add("data/file-a.parquet")));
 
         SnapshotManager manager = new SnapshotManager(log);
 
@@ -223,14 +127,9 @@ class SnapshotVerificationTest {
 
         assertEquals(1, snapshot.fileCount());
 
-        assertTrue(
-                snapshot.contains("data/file-a.parquet")
-        );
+        assertTrue(snapshot.contains("data/file-a.parquet"));
 
-        assertEquals(
-                0,
-                snapshot.tombstones().size()
-        );
+        assertEquals(0, snapshot.tombstones().size());
     }
 
     @Test
@@ -239,20 +138,11 @@ class SnapshotVerificationTest {
         LocalStorage storage = new LocalStorage(tempDir);
         TransactionLog log = new TransactionLog(storage);
 
-        log.append(
-                0,
-                List.of(add("data/file-a.parquet"))
-        );
+        log.append(0, List.of(add("data/file-a.parquet")));
 
-        log.append(
-                1,
-                List.of(add("data/file-b.parquet"))
-        );
+        log.append(1, List.of(add("data/file-b.parquet")));
 
-        log.append(
-                2,
-                List.of(remove("data/file-a.parquet"))
-        );
+        log.append(2, List.of(remove("data/file-a.parquet")));
 
         SnapshotManager manager = new SnapshotManager(log);
 
@@ -260,32 +150,15 @@ class SnapshotVerificationTest {
         Snapshot version1 = manager.loadSnapshot(1);
         Snapshot version2 = manager.loadSnapshot(2);
 
-        // Version 0
         assertEquals(1, version0.fileCount());
-        assertTrue(
-                version0.contains("data/file-a.parquet")
-        );
-        assertFalse(
-                version0.contains("data/file-b.parquet")
-        );
-
-        // Version 1
+        assertTrue(version0.contains("data/file-a.parquet"));
+        assertFalse(version0.contains("data/file-b.parquet"));
         assertEquals(2, version1.fileCount());
-        assertTrue(
-                version1.contains("data/file-a.parquet")
-        );
-        assertTrue(
-                version1.contains("data/file-b.parquet")
-        );
-
-        // Version 2
+        assertTrue(version1.contains("data/file-a.parquet"));
+        assertTrue(version1.contains("data/file-b.parquet"));
         assertEquals(1, version2.fileCount());
-        assertFalse(
-                version2.contains("data/file-a.parquet")
-        );
-        assertTrue(
-                version2.contains("data/file-b.parquet")
-        );
+        assertFalse(version2.contains("data/file-a.parquet"));
+        assertTrue(version2.contains("data/file-b.parquet"));
     }
 
     @Test
@@ -294,73 +167,23 @@ class SnapshotVerificationTest {
         LocalStorage storage = new LocalStorage(tempDir);
         TransactionLog log = new TransactionLog(storage);
 
-        log.append(
-                0,
-                List.of(
-                        ActionCodec.encode(
-                                new Protocol(1, 1)
-                        ),
-                        ActionCodec.encode(
-                                new Metadata(
-                                        "table-1",
-                                        "parquet",
-                                        "schema-v1",
-                                        List.of(),
-                                        Map.of()
-                                )
-                        )
-                )
-        );
+        log.append(0, List.of(ActionCodec.encode(new Protocol(1, 1)), ActionCodec.encode(new Metadata("table-1", "parquet", "schema-v1", List.of(), Map.of()))));
 
-        log.append(
-                1,
-                List.of(
-                        ActionCodec.encode(
-                                new Protocol(2, 3)
-                        ),
-                        ActionCodec.encode(
-                                new Metadata(
-                                        "table-1",
-                                        "parquet",
-                                        "schema-v2",
-                                        List.of("date"),
-                                        Map.of(
-                                                "key",
-                                                "value"
-                                        )
-                                )
-                        )
-                )
-        );
+        log.append(1, List.of(ActionCodec.encode(new Protocol(2, 3)), ActionCodec.encode(new Metadata("table-1", "parquet", "schema-v2", List.of("date"), Map.of("key", "value")))));
 
         SnapshotManager manager = new SnapshotManager(log);
 
         Snapshot snapshot = manager.loadSnapshot(1);
 
-        assertEquals(
-                2,
-                snapshot.protocol().minReaderVersion()
-        );
+        assertEquals(2, snapshot.protocol().minReaderVersion());
 
-        assertEquals(
-                3,
-                snapshot.protocol().minWriterVersion()
-        );
+        assertEquals(3, snapshot.protocol().minWriterVersion());
 
-        assertEquals(
-                "schema-v2",
-                snapshot.metadata().schemaString()
-        );
+        assertEquals("schema-v2", snapshot.metadata().schemaString());
 
-        assertEquals(
-                List.of("date"),
-                snapshot.metadata().partitionColumns()
-        );
+        assertEquals(List.of("date"), snapshot.metadata().partitionColumns());
 
-        assertEquals(
-                "value",
-                snapshot.metadata().configuration().get("key")
-        );
+        assertEquals("value", snapshot.metadata().configuration().get("key"));
     }
 
     @Test
@@ -369,44 +192,11 @@ class SnapshotVerificationTest {
         LocalStorage storage = new LocalStorage(tempDir);
         TransactionLog log = new TransactionLog(storage);
 
-        log.append(
-                0,
-                List.of(
-                        ActionCodec.encode(
-                                new Txn(
-                                        "app-1",
-                                        1L,
-                                        1000L
-                                )
-                        )
-                )
-        );
+        log.append(0, List.of(ActionCodec.encode(new Txn("app-1", 1L, 1000L))));
 
-        log.append(
-                1,
-                List.of(
-                        ActionCodec.encode(
-                                new Txn(
-                                        "app-1",
-                                        3L,
-                                        3000L
-                                )
-                        )
-                )
-        );
+        log.append(1, List.of(ActionCodec.encode(new Txn("app-1", 3L, 3000L))));
 
-        log.append(
-                2,
-                List.of(
-                        ActionCodec.encode(
-                                new Txn(
-                                        "app-1",
-                                        2L,
-                                        2000L
-                                )
-                        )
-                )
-        );
+        log.append(2, List.of(ActionCodec.encode(new Txn("app-1", 2L, 2000L))));
 
         SnapshotManager manager = new SnapshotManager(log);
 
@@ -427,14 +217,7 @@ class SnapshotVerificationTest {
         LocalStorage storage = new LocalStorage(tempDir);
         TransactionLog log = new TransactionLog(storage);
 
-        log.append(
-                0,
-                List.of(
-                        ActionCodec.encode(
-                                commitInfo("WRITE")
-                        )
-                )
-        );
+        log.append(0, List.of(ActionCodec.encode(commitInfo("WRITE"))));
 
         SnapshotManager manager = new SnapshotManager(log);
 
@@ -451,16 +234,10 @@ class SnapshotVerificationTest {
         LocalStorage storage = new LocalStorage(tempDir);
         TransactionLog log = new TransactionLog(storage);
 
-        log.append(
-                0,
-                List.of(add("data/file-a.parquet"))
-        );
+        log.append(0, List.of(add("data/file-a.parquet")));
 
         SnapshotManager manager = new SnapshotManager(log);
 
-        assertThrows(
-                IllegalArgumentException.class,
-                () -> manager.loadSnapshot(1)
-        );
+        assertThrows(IllegalArgumentException.class, () -> manager.loadSnapshot(1));
     }
 }

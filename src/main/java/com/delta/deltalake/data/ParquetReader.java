@@ -12,6 +12,7 @@ import java.nio.file.Files;
 import java.util.ArrayList;
 import java.util.List;
 
+/** Reads typed records from Parquet files using the table's schema conventions. */
 public final class ParquetReader {
 
     private ParquetReader() {}

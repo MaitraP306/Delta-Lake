@@ -22,6 +22,7 @@ import java.util.List;
 
 import org.apache.avro.generic.GenericRecord;
 
+/** Loads checkpoint state and keeps checkpoint metadata out of the hot snapshot path. */
 public final class CheckpointManager {
     private static final String DELETED_FILE_RETENTION_MILLIS = "delta.deletedFileRetentionMillis";
     private static final long DEFAULT_DELETED_FILE_RETENTION_MILLIS = Duration.ofDays(7).toMillis();

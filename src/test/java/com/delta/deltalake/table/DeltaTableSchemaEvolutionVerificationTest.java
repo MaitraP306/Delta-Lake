@@ -161,20 +161,10 @@ class DeltaTableSchemaEvolutionVerificationTest {
     }
 
     private Row row(TableSchema schema, long id, String name, int age) {
-        return Row.of(schema, Map.of(
-                "id", id,
-                "name", name,
-                "age", age
-        ));
+        return Row.of(schema, Map.of("id", id, "name", name, "age", age));
     }
 
-    private Row rowWithCity(
-            TableSchema schema,
-            long id,
-            String name,
-            int age,
-            String city
-    ) {
+    private Row rowWithCity(TableSchema schema, long id, String name, int age, String city) {
         Map<String, Object> values = new HashMap<>();
         values.put("id", id);
         values.put("name", name);
@@ -188,9 +178,7 @@ class DeltaTableSchemaEvolutionVerificationTest {
     }
 
     private List<String> activePaths(DeltaTable table) throws IOException {
-        return activeFiles(table).stream()
-                .map(AddFile::path)
-                .toList();
+        return activeFiles(table).stream().map(AddFile::path).toList();
     }
 
 //     private boolean containsAction(
@@ -208,10 +196,6 @@ class DeltaTableSchemaEvolutionVerificationTest {
 //         return false;
 //     }
 
-    // -------------------------------------------------------------------------
-    // Basic additive evolution
-    // -------------------------------------------------------------------------
-
     @Test
     void addNullableColumn() throws Exception {
         DeltaTable table = newTable();
@@ -219,9 +203,7 @@ class DeltaTableSchemaEvolutionVerificationTest {
         TableSchema original = baseSchema();
         TableSchema evolved = schemaWithCity();
 
-        table.appendRows(List.of(
-                row(original, 1, "Alice", 25)
-        ));
+        table.appendRows(List.of(row(original, 1, "Alice", 25)));
 
         assertEquals(0, table.version());
         assertEquals(original.json(), table.currentSchema().json());
@@ -239,10 +221,7 @@ class DeltaTableSchemaEvolutionVerificationTest {
         TableSchema original = baseSchema();
         TableSchema evolved = schemaWithCity();
 
-        table.appendRows(List.of(
-                row(original, 1, "Alice", 25),
-                row(original, 2, "Bob", 30)
-        ));
+        table.appendRows(List.of(row(original, 1, "Alice", 25), row(original, 2, "Bob", 30)));
 
         List<String> before = activePaths(table);
 
@@ -262,9 +241,7 @@ class DeltaTableSchemaEvolutionVerificationTest {
         TableSchema original = baseSchema();
         TableSchema evolved = schemaWithCity();
 
-        table.appendRows(List.of(
-                row(original, 1, "Alice", 25)
-        ));
+        table.appendRows(List.of(row(original, 1, "Alice", 25)));
 
         table.evolveSchema(evolved);
 
@@ -287,15 +264,11 @@ class DeltaTableSchemaEvolutionVerificationTest {
         TableSchema original = baseSchema();
         TableSchema evolved = schemaWithCity();
 
-        table.appendRows(List.of(
-                row(original, 1, "Alice", 25)
-        ));
+        table.appendRows(List.of(row(original, 1, "Alice", 25)));
 
         table.evolveSchema(evolved);
 
-        table.appendRows(List.of(
-                rowWithCity(evolved, 2, "Bob", 30, "Toronto")
-        ));
+        table.appendRows(List.of(rowWithCity(evolved, 2, "Bob", 30, "Toronto")));
 
         List<Row> rows = table.readRows();
 
@@ -318,9 +291,7 @@ class DeltaTableSchemaEvolutionVerificationTest {
         TableSchema original = baseSchema();
         TableSchema evolved = schemaWithCity();
 
-        table.appendRows(List.of(
-                row(original, 1, "Alice", 25)
-        ));
+        table.appendRows(List.of(row(original, 1, "Alice", 25)));
 
         assertEquals(0, table.version());
 
@@ -328,20 +299,11 @@ class DeltaTableSchemaEvolutionVerificationTest {
 
         assertEquals(1, table.version());
 
-        assertEquals(
-                original.json(),
-                table.snapshot(0).metadata().schemaString()
-        );
+        assertEquals(original.json(), table.snapshot(0).metadata().schemaString());
 
-        assertEquals(
-                evolved.json(),
-                table.snapshot(1).metadata().schemaString()
-        );
+        assertEquals(evolved.json(), table.snapshot(1).metadata().schemaString());
     }
 
-    // -------------------------------------------------------------------------
-    // Required fields
-    // -------------------------------------------------------------------------
 
     @Test
     void requiredNewColumnWithoutDefaultIsRejected() throws Exception {
@@ -350,22 +312,14 @@ class DeltaTableSchemaEvolutionVerificationTest {
         TableSchema original = baseSchema();
         TableSchema evolved = schemaWithRequiredCity();
 
-        table.appendRows(List.of(
-                row(original, 1, "Alice", 25)
-        ));
+        table.appendRows(List.of(row(original, 1, "Alice", 25)));
 
-        assertThrows(
-                IllegalArgumentException.class,
-                () -> table.evolveSchema(evolved)
-        );
+        assertThrows(IllegalArgumentException.class, () -> table.evolveSchema(evolved));
 
         assertEquals(0, table.version());
         assertEquals(original.json(), table.currentSchema().json());
     }
 
-    // -------------------------------------------------------------------------
-    // Rename / Avro alias
-    // -------------------------------------------------------------------------
 
     @Test
     void renameUsingAliasIsAccepted() throws Exception {
@@ -374,9 +328,7 @@ class DeltaTableSchemaEvolutionVerificationTest {
         TableSchema original = baseSchema();
         TableSchema renamed = renamedNameSchema();
 
-        table.appendRows(List.of(
-                row(original, 1, "Alice", 25)
-        ));
+        table.appendRows(List.of(row(original, 1, "Alice", 25)));
 
         long version = table.evolveSchema(renamed);
 
@@ -391,9 +343,7 @@ class DeltaTableSchemaEvolutionVerificationTest {
         TableSchema original = baseSchema();
         TableSchema renamed = renamedNameSchema();
 
-        table.appendRows(List.of(
-                row(original, 1, "Alice", 25)
-        ));
+        table.appendRows(List.of(row(original, 1, "Alice", 25)));
 
         table.evolveSchema(renamed);
 
@@ -415,10 +365,7 @@ class DeltaTableSchemaEvolutionVerificationTest {
         TableSchema original = baseSchema();
         TableSchema renamed = renamedNameSchema();
 
-        table.appendRows(List.of(
-                row(original, 1, "Alice", 25),
-                row(original, 2, "Bob", 30)
-        ));
+        table.appendRows(List.of(row(original, 1, "Alice", 25), row(original, 2, "Bob", 30)));
 
         table.evolveSchema(renamed);
 
@@ -426,22 +373,10 @@ class DeltaTableSchemaEvolutionVerificationTest {
 
         assertEquals(2, rows.size());
 
-        assertTrue(
-                rows.stream().anyMatch(
-                        r -> "Alice".equals(r.get("full_name"))
-                )
-        );
+        assertTrue(rows.stream().anyMatch(r -> "Alice".equals(r.get("full_name"))));
 
-        assertTrue(
-                rows.stream().anyMatch(
-                        r -> "Bob".equals(r.get("full_name"))
-                )
-        );
+        assertTrue(rows.stream().anyMatch(r -> "Bob".equals(r.get("full_name"))));
     }
-
-    // -------------------------------------------------------------------------
-    // Numeric widening / narrowing
-    // -------------------------------------------------------------------------
 
     @Test
     void intToLongWideningIsAccepted() throws Exception {
@@ -450,9 +385,7 @@ class DeltaTableSchemaEvolutionVerificationTest {
         TableSchema original = baseSchema();
         TableSchema evolved = intToLongSchema();
 
-        table.appendRows(List.of(
-                row(original, 1, "Alice", 25)
-        ));
+        table.appendRows(List.of(row(original, 1, "Alice", 25)));
 
         long version = table.evolveSchema(evolved);
 
@@ -471,9 +404,7 @@ class DeltaTableSchemaEvolutionVerificationTest {
         TableSchema original = baseSchema();
         TableSchema evolved = longToDoubleSchema();
 
-        table.appendRows(List.of(
-                row(original, 1, "Alice", 25)
-        ));
+        table.appendRows(List.of(row(original, 1, "Alice", 25)));
 
         long version = table.evolveSchema(evolved);
 
@@ -492,14 +423,9 @@ class DeltaTableSchemaEvolutionVerificationTest {
         TableSchema original = baseSchema();
         TableSchema narrowed = longToIntSchema();
 
-        table.appendRows(List.of(
-                row(original, 1, "Alice", 25)
-        ));
+        table.appendRows(List.of(row(original, 1, "Alice", 25)));
 
-        assertThrows(
-                IllegalArgumentException.class,
-                () -> table.evolveSchema(narrowed)
-        );
+        assertThrows(IllegalArgumentException.class, () -> table.evolveSchema(narrowed));
 
         assertEquals(0, table.version());
         assertEquals(original.json(), table.currentSchema().json());
@@ -512,22 +438,13 @@ class DeltaTableSchemaEvolutionVerificationTest {
         TableSchema original = baseSchema();
         TableSchema incompatible = incompatibleSchema();
 
-        table.appendRows(List.of(
-                row(original, 1, "Alice", 25)
-        ));
+        table.appendRows(List.of(row(original, 1, "Alice", 25)));
 
-        assertThrows(
-                IllegalArgumentException.class,
-                () -> table.evolveSchema(incompatible)
-        );
+        assertThrows(IllegalArgumentException.class, () -> table.evolveSchema(incompatible));
 
         assertEquals(0, table.version());
         assertEquals(original.json(), table.currentSchema().json());
     }
-
-    // -------------------------------------------------------------------------
-    // Drop column / physical rewrite
-    // -------------------------------------------------------------------------
 
     @Test
     void droppingColumnIsAcceptedAndCreatesNewVersion() throws Exception {
@@ -536,10 +453,7 @@ class DeltaTableSchemaEvolutionVerificationTest {
         TableSchema original = baseSchema();
         TableSchema dropped = schemaWithoutAge();
 
-        table.appendRows(List.of(
-                row(original, 1, "Alice", 25),
-                row(original, 2, "Bob", 30)
-        ));
+        table.appendRows(List.of(row(original, 1, "Alice", 25), row(original, 2, "Bob", 30)));
 
         long version = table.evolveSchema(dropped);
 
@@ -554,10 +468,7 @@ class DeltaTableSchemaEvolutionVerificationTest {
         TableSchema original = baseSchema();
         TableSchema dropped = schemaWithoutAge();
 
-        table.appendRows(List.of(
-                row(original, 1, "Alice", 25),
-                row(original, 2, "Bob", 30)
-        ));
+        table.appendRows(List.of(row(original, 1, "Alice", 25), row(original, 2, "Bob", 30)));
 
         List<String> before = activePaths(table);
 
@@ -578,9 +489,7 @@ class DeltaTableSchemaEvolutionVerificationTest {
         TableSchema original = baseSchema();
         TableSchema dropped = schemaWithoutAge();
 
-        table.appendRows(List.of(
-                row(original, 1, "Alice", 25)
-        ));
+        table.appendRows(List.of(row(original, 1, "Alice", 25)));
 
         long version = table.evolveSchema(dropped);
 
@@ -591,31 +500,16 @@ class DeltaTableSchemaEvolutionVerificationTest {
         System.out.println("=== SCHEMA EVOLUTION LOG ===");
 
         for (VersionedLogRecord record : records) {
-            System.out.println(
-                    "version=" + record.version()
-                            + ", type=" + record.record().type()
-                            + ", actionClass="
-                            + record.record().action().getClass().getName()
-                            + ", action="
-                            + record.record().action()
-            );
+            System.out.println("version=" + record.version() + ", type=" + record.record().type() + ", actionClass=" + record.record().action().getClass().getName() + ", action=" + record.record().action());
         }
 
         System.out.println("============================");
 
         assertFalse(records.isEmpty());
 
-        assertTrue(
-                records.stream()
-                        .anyMatch(r -> "remove".equalsIgnoreCase(r.record().type())),
-                "Expected remove action"
-        );
+        assertTrue(records.stream().anyMatch(r -> "remove".equalsIgnoreCase(r.record().type())), "Expected remove action");
 
-        assertTrue(
-                records.stream()
-                        .anyMatch(r -> "add".equalsIgnoreCase(r.record().type())),
-                "Expected add action"
-        );
+        assertTrue(records.stream().anyMatch(r -> "add".equalsIgnoreCase(r.record().type())), "Expected add action");
     }
 
     @Test
@@ -625,10 +519,7 @@ class DeltaTableSchemaEvolutionVerificationTest {
         TableSchema original = baseSchema();
         TableSchema dropped = schemaWithoutAge();
 
-        table.appendRows(List.of(
-                row(original, 1, "Alice", 25),
-                row(original, 2, "Bob", 30)
-        ));
+        table.appendRows(List.of(row(original, 1, "Alice", 25), row(original, 2, "Bob", 30)));
 
         table.evolveSchema(dropped);
 
@@ -636,24 +527,11 @@ class DeltaTableSchemaEvolutionVerificationTest {
 
         assertEquals(2, rows.size());
 
-        assertTrue(
-                rows.stream().anyMatch(
-                        r -> ((Long) r.get("id")) == 1L
-                                && "Alice".equals(r.get("name"))
-                )
-        );
+        assertTrue(rows.stream().anyMatch(r -> ((Long) r.get("id")) == 1L && "Alice".equals(r.get("name"))));
 
-        assertTrue(
-                rows.stream().anyMatch(
-                        r -> ((Long) r.get("id")) == 2L
-                                && "Bob".equals(r.get("name"))
-                )
-        );
+        assertTrue(rows.stream().anyMatch(r -> ((Long) r.get("id")) == 2L && "Bob".equals(r.get("name"))));
     }
 
-    // -------------------------------------------------------------------------
-    // Idempotence
-    // -------------------------------------------------------------------------
 
     @Test
     void identicalSchemaEvolutionIsNoOp() throws Exception {
@@ -661,9 +539,7 @@ class DeltaTableSchemaEvolutionVerificationTest {
 
         TableSchema original = baseSchema();
 
-        table.appendRows(List.of(
-                row(original, 1, "Alice", 25)
-        ));
+        table.appendRows(List.of(row(original, 1, "Alice", 25)));
 
         assertEquals(0, table.version());
 
@@ -674,9 +550,6 @@ class DeltaTableSchemaEvolutionVerificationTest {
         assertEquals(original.json(), table.currentSchema().json());
     }
 
-    // -------------------------------------------------------------------------
-    // Checkpoint interaction
-    // -------------------------------------------------------------------------
 
     @Test
     void checkpointPreservesEvolvedSchema() throws Exception {
@@ -685,9 +558,7 @@ class DeltaTableSchemaEvolutionVerificationTest {
         TableSchema original = baseSchema();
         TableSchema evolved = schemaWithCity();
 
-        table.appendRows(List.of(
-                row(original, 1, "Alice", 25)
-        ));
+        table.appendRows(List.of(row(original, 1, "Alice", 25)));
 
         table.evolveSchema(evolved);
 
@@ -698,20 +569,13 @@ class DeltaTableSchemaEvolutionVerificationTest {
         DeltaTable reopened = newTable();
 
         assertEquals(1, reopened.version());
-        assertEquals(
-                evolved.json(),
-                reopened.currentSchema().json()
-        );
+        assertEquals(evolved.json(), reopened.currentSchema().json());
 
         List<Row> rows = reopened.readRows();
 
         assertEquals(1, rows.size());
         assertNull(rows.get(0).get("city"));
     }
-
-    // -------------------------------------------------------------------------
-    // User metadata
-    // -------------------------------------------------------------------------
 
     @Test
     void evolutionCanRecordUserMetadata() throws Exception {
@@ -720,14 +584,9 @@ class DeltaTableSchemaEvolutionVerificationTest {
         TableSchema original = baseSchema();
         TableSchema evolved = schemaWithCity();
 
-        table.appendRows(List.of(
-                row(original, 1, "Alice", 25)
-        ));
+        table.appendRows(List.of(row(original, 1, "Alice", 25)));
 
-        long version = table.evolveSchema(
-                evolved,
-                "add city column"
-        );
+        long version = table.evolveSchema(evolved, "add city column");
 
         assertEquals(1, version);
 
@@ -736,26 +595,14 @@ class DeltaTableSchemaEvolutionVerificationTest {
         System.out.println("=== SCHEMA EVOLUTION METADATA ===");
 
         for (VersionedLogRecord record : records) {
-            System.out.println(
-                    "version=" + record.version()
-                            + ", type=" + record.record().type()
-                            + ", action=" + record.record().action()
-            );
+            System.out.println("version=" + record.version() + ", type=" + record.record().type() + ", action=" + record.record().action());
         }
 
         System.out.println("=================================");
 
-        assertTrue(
-                records.stream().anyMatch(
-                        r -> "commitInfo".equalsIgnoreCase(r.record().type())
-                ),
-                "Expected CommitInfo action"
-        );
+        assertTrue(records.stream().anyMatch(r -> "commitInfo".equalsIgnoreCase(r.record().type())), "Expected CommitInfo action");
     }
 
-    // -------------------------------------------------------------------------
-    // Failed evolution must not modify table
-    // -------------------------------------------------------------------------
 
     @Test
     void failedEvolutionDoesNotChangeTableState() throws Exception {
@@ -764,16 +611,11 @@ class DeltaTableSchemaEvolutionVerificationTest {
         TableSchema original = baseSchema();
         TableSchema incompatible = incompatibleSchema();
 
-        table.appendRows(List.of(
-                row(original, 1, "Alice", 25)
-        ));
+        table.appendRows(List.of(row(original, 1, "Alice", 25)));
 
         List<String> pathsBefore = activePaths(table);
 
-        assertThrows(
-                IllegalArgumentException.class,
-                () -> table.evolveSchema(incompatible)
-        );
+        assertThrows(IllegalArgumentException.class, () -> table.evolveSchema(incompatible));
 
         assertEquals(0, table.version());
         assertEquals(original.json(), table.currentSchema().json());

@@ -42,30 +42,17 @@ class DeltaTableVerificationTest {
                 }
                 """;
 
-        return new TableSchema(
-                new Schema.Parser().parse(schemaJson)
-        );
+        return new TableSchema(new Schema.Parser().parse(schemaJson));
     }
 
-    private Row row(
-            TableSchema schema,
-            long id,
-            String name,
-            int age) {
+    private Row row(TableSchema schema, long id, String name, int age) {
 
-        return Row.of(
-                schema,
-                Map.of(
-                        "id", id,
-                        "name", name,
-                        "age", age
-                )
-        );
+        return Row.of(schema, Map.of("id", id, "name", name, "age", age));
     }
 
     @Test
     void newTableDoesNotExist() throws Exception {
-        LocalStorage storage = new LocalStorage(tempDir);
+            LocalStorage storage = new LocalStorage(tempDir);
 
             DeltaTable table = DeltaTable.open(storage);
 
@@ -75,17 +62,13 @@ class DeltaTableVerificationTest {
 
     @Test
     void firstAppendCreatesTable() throws Exception {
-        LocalStorage storage = new LocalStorage(tempDir);
+            LocalStorage storage = new LocalStorage(tempDir);
 
             DeltaTable table = DeltaTable.open(storage);
 
             TableSchema schema = schema();
 
-            long version = table.appendRows(
-                    List.of(
-                            row(schema, 1L, "Alice", 20)
-                    )
-            );
+            long version = table.appendRows(List.of(row(schema, 1L, "Alice", 20)));
 
             assertEquals(0, version);
             assertTrue(table.exists());
@@ -93,148 +76,76 @@ class DeltaTableVerificationTest {
     }
 
     @Test
-    void firstAppendCreatesProtocolMetadataLogAndDataFile()
-            throws Exception {
+    void firstAppendCreatesProtocolMetadataLogAndDataFile() throws Exception {
 
-        LocalStorage storage = new LocalStorage(tempDir);
+            LocalStorage storage = new LocalStorage(tempDir);
 
             DeltaTable table = DeltaTable.open(storage);
 
             TableSchema schema = schema();
 
-            table.appendRows(
-                    List.of(
-                            row(schema, 1L, "Alice", 20),
-                            row(schema, 2L, "Bob", 25)
-                    )
-            );
+            table.appendRows(List.of(row(schema, 1L, "Alice", 20), row(schema, 2L, "Bob", 25)));
 
             assertEquals(0, table.version());
 
             Snapshot snapshot = table.snapshot();
 
-            /*
-             * The first commit must contain protocol information.
-             */
             assertNotNull(snapshot.protocol());
 
-            assertEquals(
-                    1,
-                    snapshot.protocol().minReaderVersion()
-            );
+            assertEquals(1, snapshot.protocol().minReaderVersion());
 
-            assertEquals(
-                    1,
-                    snapshot.protocol().minWriterVersion()
-            );
+            assertEquals(1, snapshot.protocol().minWriterVersion());
 
-            /*
-             * The first commit must contain table metadata.
-             */
             assertNotNull(snapshot.metadata());
 
-            assertEquals(
-                    schema.json(),
-                    snapshot.metadata().schemaString()
-            );
+            assertEquals(schema.json(), snapshot.metadata().schemaString());
 
-            /*
-             * Two rows written in a single append should result
-             * in one data file when the table is not partitioned.
-             */
-            assertEquals(
-                    1,
-                    snapshot.fileCount()
-            );
+            assertEquals(1, snapshot.fileCount());
 
-            AddFile file =
-                    snapshot.activeFiles()
-                            .iterator()
-                            .next();
+            AddFile file = snapshot.activeFiles().iterator().next();
 
             assertNotNull(file);
 
-            assertTrue(
-                    file.path().startsWith("data/")
-            );
+            assertTrue(file.path().startsWith("data/"));
 
-            assertTrue(
-                    file.path().endsWith(".parquet")
-            );
+            assertTrue(file.path().endsWith(".parquet"));
 
-            assertTrue(
-                    storage.exists(file.path())
-            );
+            assertTrue(storage.exists(file.path()));
 
-            assertTrue(
-                    storage.size(file.path()) > 0
-            );
+            assertTrue(storage.size(file.path()) > 0);
     }
 
     @Test
     void appendAndReadRowsRoundTrip() throws Exception {
-        LocalStorage storage = new LocalStorage(tempDir);
+            LocalStorage storage = new LocalStorage(tempDir);
 
             DeltaTable table = DeltaTable.open(storage);
 
             TableSchema schema = schema();
 
-            table.appendRows(
-                    List.of(
-                            row(schema, 1L, "Alice", 20),
-                            row(schema, 2L, "Bob", 25),
-                            row(schema, 3L, "Charlie", 30)
-                    )
-            );
+            table.appendRows(List.of(row(schema, 1L, "Alice", 20), row(schema, 2L, "Bob", 25), row(schema, 3L, "Charlie", 30)));
 
             List<Row> rows = table.readRows();
 
             assertEquals(3, rows.size());
 
-            assertEquals(
-                    1L,
-                    rows.get(0).get("id")
-            );
+            assertEquals(1L, rows.get(0).get("id"));
 
-            assertEquals(
-                    "Alice",
-                    rows.get(0).get("name")
-            );
+            assertEquals("Alice", rows.get(0).get("name"));
 
-            assertEquals(
-                    20,
-                    rows.get(0).get("age")
-            );
+            assertEquals(20, rows.get(0).get("age"));
 
-            assertEquals(
-                    2L,
-                    rows.get(1).get("id")
-            );
+            assertEquals(2L, rows.get(1).get("id"));
 
-            assertEquals(
-                    "Bob",
-                    rows.get(1).get("name")
-            );
+            assertEquals("Bob", rows.get(1).get("name"));
 
-            assertEquals(
-                    25,
-                    rows.get(1).get("age")
-            );
+            assertEquals(25, rows.get(1).get("age"));
 
-            assertEquals(
-                    3L,
-                    rows.get(2).get("id")
-            );
+            assertEquals(3L, rows.get(2).get("id"));
 
-            assertEquals(
-                    "Charlie",
-                    rows.get(2).get("name")
-            );
+            assertEquals("Charlie", rows.get(2).get("name"));
 
-            assertEquals(
-                    30,
-                    rows.get(2).get("age")
-            );
+            assertEquals(30, rows.get(2).get("age"));
     }
 
     @Test
@@ -245,22 +156,12 @@ class DeltaTableVerificationTest {
 
             TableSchema schema = schema();
 
-            long version0 = table.appendRows(
-                    List.of(
-                            row(schema, 1L, "Alice", 20),
-                            row(schema, 2L, "Bob", 25)
-                    )
-            );
+            long version0 = table.appendRows(List.of(row(schema, 1L, "Alice", 20), row(schema, 2L, "Bob", 25)));
 
             assertEquals(0, version0);
             assertEquals(0, table.version());
 
-            long version1 = table.appendRows(
-                    List.of(
-                            row(schema, 3L, "Charlie", 30),
-                            row(schema, 4L, "David", 35)
-                    )
-            );
+            long version1 = table.appendRows(List.of(row(schema, 3L, "Charlie", 30), row(schema, 4L, "David", 35)));
 
             assertEquals(1, version1);
             assertEquals(1, table.version());
@@ -277,56 +178,35 @@ class DeltaTableVerificationTest {
 
     @Test
     void currentSchemaComesFromMetadata() throws Exception {
-        LocalStorage storage = new LocalStorage(tempDir);
+            LocalStorage storage = new LocalStorage(tempDir);
 
             DeltaTable table = DeltaTable.open(storage);
 
             TableSchema schema = schema();
 
-            table.appendRows(
-                    List.of(
-                            row(schema, 1L, "Alice", 20)
-                    )
-            );
+            table.appendRows(List.of(row(schema, 1L, "Alice", 20)));
 
-            TableSchema current =
-                    table.currentSchema();
+            TableSchema current = table.currentSchema();
 
             assertNotNull(current);
 
-            assertEquals(
-                    schema.json(),
-                    current.json()
-            );
+            assertEquals(schema.json(), current.json());
 
-            assertEquals(
-                    List.of("id", "name", "age"),
-                    current.fieldNames()
-            );
+            assertEquals(List.of("id", "name", "age"), current.fieldNames());
     }
 
     @Test
-    void schemaMismatchIsRejectedOnSecondAppend()
-            throws Exception {
+    void schemaMismatchIsRejectedOnSecondAppend() throws Exception {
 
-        LocalStorage storage = new LocalStorage(tempDir);
+            LocalStorage storage = new LocalStorage(tempDir);
 
             DeltaTable table = DeltaTable.open(storage);
 
-            TableSchema original =
-                    schema();
+            TableSchema original = schema();
 
-            table.appendRows(
-                    List.of(
-                            row(original, 1L, "Alice", 20)
-                    )
-            );
+            table.appendRows(List.of(row(original, 1L, "Alice", 20)));
 
             assertEquals(0, table.version());
-
-            /*
-             * Completely incompatible schema.
-             */
             String incompatibleSchemaJson = """
                     {
                       "type": "record",
@@ -344,253 +224,107 @@ class DeltaTableVerificationTest {
                     }
                     """;
 
-            TableSchema incompatible =
-                    new TableSchema(
-                            new Schema.Parser()
-                                    .parse(incompatibleSchemaJson)
-                    );
+            TableSchema incompatible = new TableSchema(new Schema.Parser().parse(incompatibleSchemaJson));
 
-            Row incompatibleRow =
-                    Row.of(
-                            incompatible,
-                            Map.of(
-                                    "id", 2L,
-                                    "different", "bad"
-                            )
-                    );
+            Row incompatibleRow = Row.of(incompatible, Map.of("id", 2L, "different", "bad"));
 
-            assertThrows(
-                    IllegalArgumentException.class,
-                    () -> table.appendRows(
-                            List.of(incompatibleRow)
-                    )
-            );
+            assertThrows(IllegalArgumentException.class, () -> table.appendRows(List.of(incompatibleRow)));
 
-            /*
-             * Failed append must not create
-             * another transaction-log version.
-             */
             assertEquals(0, table.version());
 
-            /*
-             * Existing data must remain intact.
-             */
-            List<Row> rows =
-                    table.readRows();
+            List<Row> rows = table.readRows();
 
             assertEquals(1, rows.size());
 
-            assertEquals(
-                    1L,
-                    rows.get(0).get("id")
-            );
+            assertEquals(1L, rows.get(0).get("id"));
 
-            assertEquals(
-                    "Alice",
-                    rows.get(0).get("name")
-            );
+            assertEquals("Alice", rows.get(0).get("name"));
 
-            assertEquals(
-                    20,
-                    rows.get(0).get("age")
-            );
+            assertEquals(20, rows.get(0).get("age"));
     }
 
     @Test
     void emptyAppendIsRejected() throws Exception {
-        LocalStorage storage = new LocalStorage(tempDir);
+            LocalStorage storage = new LocalStorage(tempDir);
 
-            DeltaTable table =
-                    DeltaTable.open(storage);
-
-            assertThrows(
-                    IllegalArgumentException.class,
-                    () -> table.appendRows(List.of())
-            );
-
-            /*
-             * Empty append should not create
-             * a Delta table.
-             */
+            DeltaTable table = DeltaTable.open(storage);
+            assertThrows(IllegalArgumentException.class, () -> table.appendRows(List.of()));
             assertFalse(table.exists());
 
-            assertEquals(
-                    -1,
-                    table.version()
-            );
+            assertEquals(-1, table.version());
     }
 
     @Test
-    void snapshotAndReadHistoricalVersion()
-            throws Exception {
-
-        LocalStorage storage = new LocalStorage(tempDir);
-
-            DeltaTable table =
-                    DeltaTable.open(storage);
-
-            TableSchema schema =
-                    schema();
-
-            /*
-             * Version 0.
-             */
-            table.appendRows(
-                    List.of(
-                            row(schema, 1L, "Alice", 20)
-                    )
-            );
-
-            assertEquals(
-                    0,
-                    table.version()
-            );
-
-            /*
-             * Version 1.
-             */
-            table.appendRows(
-                    List.of(
-                            row(schema, 2L, "Bob", 25)
-                    )
-            );
-
-            assertEquals(
-                    1,
-                    table.version()
-            );
-
-            Snapshot snapshotV0 =
-                    table.snapshot(0);
-
-            Snapshot snapshotV1 =
-                    table.snapshot(1);
-
-            assertEquals(
-                    0,
-                    snapshotV0.version()
-            );
-
-            assertEquals(
-                    1,
-                    snapshotV1.version()
-            );
-
-            /*
-             * Version 0 contains one active file.
-             */
-            assertEquals(
-                    1,
-                    snapshotV0.fileCount()
-            );
-
-            /*
-             * Version 1 contains both files.
-             */
-            assertEquals(
-                    2,
-                    snapshotV1.fileCount()
-            );
-
-            /*
-             * Time travel read.
-             */
-            List<Row> historicalRows =
-                    table.readRows(0);
-
-            assertEquals(
-                    1,
-                    historicalRows.size()
-            );
-
-            assertEquals(
-                    1L,
-                    historicalRows.get(0).get("id")
-            );
-
-            /*
-             * Current table contains both rows.
-             */
-            List<Row> currentRows =
-                    table.readRows();
-
-            assertEquals(
-                    2,
-                    currentRows.size()
-            );
-    }
-
-    @Test
-    void appendCreatesRealParquetDataFile()
-            throws Exception {
+    void snapshotAndReadHistoricalVersion() throws Exception {
 
             LocalStorage storage = new LocalStorage(tempDir);
-            DeltaTable table =
-                    DeltaTable.open(storage);
 
-            TableSchema schema =
-                    schema();
+            DeltaTable table = DeltaTable.open(storage);
 
-            table.appendRows(
-                    List.of(
-                            row(schema, 1L, "Alice", 20),
-                            row(schema, 2L, "Bob", 25)
-                    )
-            );
+            TableSchema schema = schema();
 
-            Snapshot snapshot =
-                    table.snapshot();
+            table.appendRows(List.of(row(schema, 1L, "Alice", 20)));
 
-            assertEquals(
-                    1,
-                    snapshot.fileCount()
-            );
+            assertEquals(0, table.version());
 
-            AddFile file =
-                    snapshot.activeFiles()
-                            .iterator()
-                            .next();
+            table.appendRows(List.of(row(schema, 2L, "Bob", 25)));
 
-            String dataPath =
-                    file.path();
+            assertEquals(1, table.version());
 
-            assertTrue(
-                    dataPath.startsWith("data/")
-            );
+            Snapshot snapshotV0 = table.snapshot(0);
 
-            assertTrue(
-                    dataPath.endsWith(".parquet")
-            );
+            Snapshot snapshotV1 = table.snapshot(1);
 
-            /*
-             * LocalStorage stores the logical Delta path
-             * underneath the temporary directory.
-             */
-            Path physicalPath =
-                    tempDir.resolve(dataPath);
+            assertEquals(0, snapshotV0.version());
 
-            assertTrue(
-                    Files.exists(physicalPath)
-            );
+            assertEquals(1, snapshotV1.version());
 
-            assertTrue(
-                    Files.isRegularFile(physicalPath)
-            );
+            assertEquals(1, snapshotV0.fileCount());
 
-            long actualSize =
-                    Files.size(physicalPath);
+            assertEquals(2, snapshotV1.fileCount());
 
-            assertTrue(
-                    actualSize > 0
-            );
+            List<Row> historicalRows = table.readRows(0);
 
-            /*
-             * AddFile metadata should contain
-             * the actual Parquet object size.
-             */
-            assertEquals(
-                    actualSize,
-                    file.size()
-            );
+            assertEquals(1, historicalRows.size());
+
+            assertEquals(1L, historicalRows.get(0).get("id"));
+            List<Row> currentRows = table.readRows();
+
+            assertEquals(2, currentRows.size());
+    }
+
+    @Test
+    void appendCreatesRealParquetDataFile() throws Exception {
+
+            LocalStorage storage = new LocalStorage(tempDir);
+            DeltaTable table = DeltaTable.open(storage);
+
+            TableSchema schema = schema();
+
+            table.appendRows(List.of(row(schema, 1L, "Alice", 20), row(schema, 2L, "Bob", 25)));
+
+            Snapshot snapshot = table.snapshot();
+
+            assertEquals(1, snapshot.fileCount());
+
+            AddFile file = snapshot.activeFiles().iterator().next();
+
+            String dataPath = file.path();
+
+            assertTrue(dataPath.startsWith("data/"));
+
+            assertTrue(dataPath.endsWith(".parquet"));
+
+            Path physicalPath = tempDir.resolve(dataPath);
+
+            assertTrue(Files.exists(physicalPath));
+
+            assertTrue(Files.isRegularFile(physicalPath));
+
+            long actualSize = Files.size(physicalPath);
+
+            assertTrue(actualSize > 0);
+
+            assertEquals(actualSize, file.size());
     }
 }

@@ -40,33 +40,18 @@ class DeltaTableCacheVerificationTest {
     }
 
     private Row row(TableSchema schema, long id, double value) {
-        return Row.of(
-                schema,
-                Map.of(
-                        "id", id,
-                        "value", value
-                )
-        );
+        return Row.of(schema, Map.of("id", id, "value", value));
     }
 
     private List<Row> sortedById(List<Row> rows) {
-        return rows.stream()
-                .sorted(Comparator.comparingLong(
-                        r -> ((Number) r.get("id")).longValue()
-                ))
-                .toList();
+        return rows.stream().sorted(Comparator.comparingLong(r -> ((Number) r.get("id")).longValue())).toList();
     }
 
     @Test
     void repeatedReadsReturnSameData() throws Exception {
         DeltaTable table = newTable();
         TableSchema schema = schema();
-
-        List<Row> input = List.of(
-                row(schema, 1, 10.0),
-                row(schema, 2, 20.0),
-                row(schema, 3, 30.0)
-        );
+        List<Row> input = List.of(row(schema, 1, 10.0), row(schema, 2, 20.0), row(schema, 3, 30.0));
 
         long version = table.appendRows(input);
 
@@ -86,31 +71,19 @@ class DeltaTableCacheVerificationTest {
         DeltaTable table = newTable();
         TableSchema schema = schema();
 
-        table.appendRows(List.of(
-                row(schema, 1, 10.0),
-                row(schema, 2, 20.0)
-        ));
+        table.appendRows(List.of(row(schema, 1, 10.0), row(schema, 2, 20.0)));
 
-        // Populate the caches.
         List<Row> beforeAppend = sortedById(table.readRows());
 
         assertEquals(2, beforeAppend.size());
 
-        table.appendRows(List.of(
-                row(schema, 3, 30.0),
-                row(schema, 4, 40.0)
-        ));
+        table.appendRows(List.of(row(schema, 3, 30.0), row(schema, 4, 40.0)));
 
         List<Row> afterAppend = sortedById(table.readRows());
 
         assertEquals(4, afterAppend.size());
 
-        assertEquals(
-                List.of(1L, 2L, 3L, 4L),
-                afterAppend.stream()
-                        .map(r -> ((Number) r.get("id")).longValue())
-                        .toList()
-        );
+        assertEquals(List.of(1L, 2L, 3L, 4L), afterAppend.stream().map(r -> ((Number) r.get("id")).longValue()).toList());
     }
 
     @Test
@@ -118,38 +91,26 @@ class DeltaTableCacheVerificationTest {
         DeltaTable table = newTable();
         TableSchema schema = schema();
 
-        table.appendRows(List.of(
-                row(schema, 1, 10.0),
-                row(schema, 2, 20.0)
-        ));
+        table.appendRows(List.of(row(schema, 1, 10.0), row(schema, 2, 20.0)));
 
         Snapshot versionZeroFirst = table.snapshot(0);
 
         assertEquals(0, versionZeroFirst.version());
         assertEquals(1, versionZeroFirst.fileCount());
 
-        // Same version requested again.
         Snapshot versionZeroSecond = table.snapshot(0);
 
         assertEquals(0, versionZeroSecond.version());
-        assertEquals(
-                versionZeroFirst.fileCount(),
-                versionZeroSecond.fileCount()
-        );
+        assertEquals(versionZeroFirst.fileCount(), versionZeroSecond.fileCount());
 
-        table.appendRows(List.of(
-                row(schema, 3, 30.0)
-        ));
+        table.appendRows(List.of(row(schema, 3, 30.0)));
 
         assertEquals(1, table.version());
 
-        // Historical snapshot must remain unchanged.
         Snapshot historicalAgain = table.snapshot(0);
 
         assertEquals(0, historicalAgain.version());
         assertEquals(1, historicalAgain.fileCount());
-
-        // Current snapshot contains both files.
         Snapshot current = table.snapshot();
 
         assertEquals(1, current.version());
@@ -161,17 +122,11 @@ class DeltaTableCacheVerificationTest {
         DeltaTable table = newTable();
         TableSchema schema = schema();
 
-        table.appendRows(List.of(
-                row(schema, 1, 10.0)
-        ));
+        table.appendRows(List.of(row(schema, 1, 10.0)));
 
-        table.appendRows(List.of(
-                row(schema, 2, 20.0)
-        ));
+        table.appendRows(List.of(row(schema, 2, 20.0)));
 
-        table.appendRows(List.of(
-                row(schema, 3, 30.0)
-        ));
+        table.appendRows(List.of(row(schema, 3, 30.0)));
 
         assertEquals(2, table.version());
 
@@ -179,7 +134,6 @@ class DeltaTableCacheVerificationTest {
         Snapshot v1a = table.snapshot(1);
         Snapshot v2a = table.snapshot(2);
 
-        // Request them again in a different order.
         Snapshot v1b = table.snapshot(1);
         Snapshot v0b = table.snapshot(0);
         Snapshot v2b = table.snapshot(2);
@@ -206,31 +160,19 @@ class DeltaTableCacheVerificationTest {
         DeltaTable table = newTable();
         TableSchema schema = schema();
 
-        table.appendRows(List.of(
-                row(schema, 1, 10.0),
-                row(schema, 2, 20.0),
-                row(schema, 3, 30.0)
-        ));
+        table.appendRows(List.of(row(schema, 1, 10.0), row(schema, 2, 20.0), row(schema, 3, 30.0)));
 
-        // Populate data cache.
         List<Row> beforeDelete = sortedById(table.readRows());
 
         assertEquals(3, beforeDelete.size());
 
-        table.deleteRows(r ->
-                ((Number) r.get("id")).longValue() == 2L
-        );
+        table.deleteRows(r -> ((Number) r.get("id")).longValue() == 2L);
 
         List<Row> afterDelete = sortedById(table.readRows());
 
         assertEquals(2, afterDelete.size());
 
-        assertEquals(
-                List.of(1L, 3L),
-                afterDelete.stream()
-                        .map(r -> ((Number) r.get("id")).longValue())
-                        .toList()
-        );
+        assertEquals(List.of(1L, 3L), afterDelete.stream().map(r -> ((Number) r.get("id")).longValue()).toList());
     }
 
     @Test
@@ -238,46 +180,23 @@ class DeltaTableCacheVerificationTest {
         DeltaTable table = newTable();
         TableSchema schema = schema();
 
-        table.appendRows(List.of(
-                row(schema, 1, 10.0),
-                row(schema, 2, 20.0)
-        ));
+        table.appendRows(List.of(row(schema, 1, 10.0), row(schema, 2, 20.0)));
 
-        // Populate caches.
         List<Row> beforeUpsert = sortedById(table.readRows());
 
         assertEquals(2, beforeUpsert.size());
 
-        table.upsertRows(
-                List.of(
-                        row(schema, 2, 200.0),
-                        row(schema, 3, 30.0)
-                ),
-                "id"
-        );
+        table.upsertRows(List.of(row(schema, 2, 200.0), row(schema, 3, 30.0)), "id");
 
         List<Row> afterUpsert = sortedById(table.readRows());
 
         assertEquals(3, afterUpsert.size());
 
-        Row id2 = afterUpsert.stream()
-                .filter(r ->
-                        ((Number) r.get("id")).longValue() == 2L
-                )
-                .findFirst()
-                .orElseThrow();
+        Row id2 = afterUpsert.stream().filter(r -> ((Number) r.get("id")).longValue() == 2L).findFirst().orElseThrow();
 
-        assertEquals(
-                200.0,
-                ((Number) id2.get("value")).doubleValue()
-        );
+        assertEquals(200.0, ((Number) id2.get("value")).doubleValue());
 
-        assertEquals(
-                List.of(1L, 2L, 3L),
-                afterUpsert.stream()
-                        .map(r -> ((Number) r.get("id")).longValue())
-                        .toList()
-        );
+        assertEquals(List.of(1L, 2L, 3L), afterUpsert.stream().map(r -> ((Number) r.get("id")).longValue()).toList());
     }
 
     @Test
@@ -285,19 +204,12 @@ class DeltaTableCacheVerificationTest {
         DeltaTable table = newTable();
         TableSchema schema = schema();
 
-        table.appendRows(List.of(
-                row(schema, 1, 10.0)
-        ));
+        table.appendRows(List.of(row(schema, 1, 10.0)));
 
-        table.appendRows(List.of(
-                row(schema, 2, 20.0)
-        ));
+        table.appendRows(List.of(row(schema, 2, 20.0)));
 
-        table.appendRows(List.of(
-                row(schema, 3, 30.0)
-        ));
+        table.appendRows(List.of(row(schema, 3, 30.0)));
 
-        // Populate data cache before optimization.
         List<Row> beforeOptimize = sortedById(table.readRows());
 
         assertEquals(3, beforeOptimize.size());
@@ -311,12 +223,7 @@ class DeltaTableCacheVerificationTest {
         assertEquals(3, afterOptimize.size());
         assertEquals(beforeOptimize, afterOptimize);
 
-        assertEquals(
-                List.of(1L, 2L, 3L),
-                afterOptimize.stream()
-                        .map(r -> ((Number) r.get("id")).longValue())
-                        .toList()
-        );
+        assertEquals(List.of(1L, 2L, 3L), afterOptimize.stream().map(r -> ((Number) r.get("id")).longValue()).toList());
     }
 
     @Test
@@ -324,15 +231,10 @@ class DeltaTableCacheVerificationTest {
         DeltaTable table = newTable();
         TableSchema schema = schema();
 
-        table.appendRows(List.of(
-                row(schema, 1, 10.0)
-        ));
+        table.appendRows(List.of(row(schema, 1, 10.0)));
 
-        table.appendRows(List.of(
-                row(schema, 2, 20.0)
-        ));
+        table.appendRows(List.of(row(schema, 2, 20.0)));
 
-        // Populate caches.
         List<Row> beforeCheckpoint = sortedById(table.readRows());
         Snapshot beforeCheckpointSnapshot = table.snapshot();
 
@@ -343,15 +245,9 @@ class DeltaTableCacheVerificationTest {
 
         Snapshot afterCheckpointSnapshot = table.snapshot();
 
-        assertEquals(
-                beforeCheckpointSnapshot.version(),
-                afterCheckpointSnapshot.version()
-        );
+        assertEquals(beforeCheckpointSnapshot.version(), afterCheckpointSnapshot.version());
 
-        assertEquals(
-                beforeCheckpointSnapshot.fileCount(),
-                afterCheckpointSnapshot.fileCount()
-        );
+        assertEquals(beforeCheckpointSnapshot.fileCount(), afterCheckpointSnapshot.fileCount());
 
         List<Row> afterCheckpoint = sortedById(table.readRows());
 
@@ -360,22 +256,14 @@ class DeltaTableCacheVerificationTest {
 
     @Test
     void repeatedCheckpointBackedSnapshotsRemainCorrect() throws Exception {
-        DeltaTable table = DeltaTable.open(
-                new LocalStorage(tempDir),
-                2
-        );
+        DeltaTable table = DeltaTable.open(new LocalStorage(tempDir), 2);
 
         TableSchema schema = schema();
 
-        table.appendRows(List.of(
-                row(schema, 1, 10.0)
-        ));
+        table.appendRows(List.of(row(schema, 1, 10.0)));
 
-        table.appendRows(List.of(
-                row(schema, 2, 20.0)
-        ));
+        table.appendRows(List.of(row(schema, 2, 20.0)));
 
-        // With interval 2, version 1 should have an automatic checkpoint.
         assertEquals(1, table.version());
 
         Snapshot first = table.snapshot(1);
@@ -397,20 +285,15 @@ class DeltaTableCacheVerificationTest {
         DeltaTable table = newTable();
         TableSchema schema = schema();
 
-        table.appendRows(List.of(
-                row(schema, 1, 10.0)
-        ));
+        table.appendRows(List.of(row(schema, 1, 10.0)));
 
-        // Repeated operations should exercise the caches.
         for (int i = 0; i < 5; i++) {
             assertEquals(0, table.version());
             assertEquals(1, table.readRows().size());
             assertEquals(0, table.snapshot().version());
         }
 
-        table.appendRows(List.of(
-                row(schema, 2, 20.0)
-        ));
+        table.appendRows(List.of(row(schema, 2, 20.0)));
 
         for (int i = 0; i < 5; i++) {
             assertEquals(1, table.version());

@@ -11,6 +11,7 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.util.Collection;
 
+/** Writes table records to Parquet while preserving schema and file-level statistics. */
 public final class ParquetWriter {
 
     private ParquetWriter() {}

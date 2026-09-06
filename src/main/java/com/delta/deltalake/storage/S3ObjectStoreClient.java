@@ -14,6 +14,7 @@ import java.util.List;
 import java.util.Objects;
 
 
+/** Small S3 client wrapper that centralizes listing, reads, writes, deletes, and retries. */
 interface S3ObjectStoreClient {
     byte[] read(String bucket, String key) throws IOException;
     void write(String bucket, String key, byte[] data) throws IOException;
